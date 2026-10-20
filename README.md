@@ -1,6 +1,6 @@
 # @datumesh/verify
 
-Verify [Datumesh](https://datumesh.com) receipts in JavaScript: signed answers for addressable data cells, checked offline against strict RFC 8785 canonical JSON and Ed25519, exactly as the [Datumesh specification](https://github.com/datumesh-com/datumesh-spec) (revision `spec-0.1.1`) defines.
+Verify [Datumesh](https://datumesh.com) receipts in JavaScript: signed answers for addressable data cells, checked offline against strict RFC 8785 canonical JSON and Ed25519, following the [Datumesh specification](https://github.com/datumesh-com/datumesh-spec) revision `spec-0.1.1` and passing all of its test vectors.
 
 ```sh
 npm install @datumesh/verify
@@ -36,9 +36,16 @@ console.log(verify(vector.input, keys).code); // OK
 - `fetchKeys(host)` is the only function that uses the network: one `GET https://<host>/.well-known/datumesh.json`, no redirects, 10 s timeout, using the platform's `fetch` and TLS verification.
 - `canonicalize(obj, kind)`, `cellHash`, `receiptHash`, `functionHash`, `parseUri(uri, signature)`, `formatUri(ref)` and `keyId` expose canonical forms, hashes and cell URIs. They throw `DatumeshError` (with `.code` and `.path`).
 
-Strings are checked against Unicode 15.1 tables shipped with the package, so results do not depend on the JavaScript engine's Unicode version. Ed25519 verification is libsodium-strict, as the spec requires. ESM and CommonJS builds with TypeScript types; Node 18+ and browsers.
+Strings are checked against Unicode 15.1 tables shipped with the package, so results do not depend on the JavaScript engine's Unicode version. Ed25519 verification is libsodium-strict, as the spec requires. ESM and CommonJS builds with TypeScript types, for Node 18+ and for browsers through a bundler (the core uses no Node built-ins). Where the specification left a question open, the choices made are listed in [DEFECTS.md](https://github.com/datumesh-com/datumesh-verify-js/blob/main/DEFECTS.md).
 
 A valid signature means only that the holder of the key named in `computed_by` stated the value. Whom to trust is your policy.
+
+## Development
+
+```sh
+git clone --recurse-submodules https://github.com/datumesh-com/datumesh-verify-js && cd datumesh-verify-js
+npm ci && npm test                 # all tests; scripts/browser-test.sh and scripts/package-test.sh need Docker
+```
 
 ## Links
 

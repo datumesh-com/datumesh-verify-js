@@ -53,4 +53,26 @@ for IMAGE in $IMAGES; do
     ls node_modules/@datumesh/verify/dist/esm/index.d.ts node_modules/@datumesh/verify/dist/cjs/index.d.ts >/dev/null
     echo "-- installed dependency tree:"; npm ls --all --omit=dev'
 done
+
+echo "== TypeScript consumer type-checks against the shipped declarations (ESM and CJS resolution)"
+docker run --rm -v "$WORK":/pkg:ro node:18-slim sh -ec '
+  mkdir /app && cd /app && npm init -y >/dev/null
+  npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz typescript@5.9.3
+  cat > esm.mts <<TS
+import { verify, keysFromResponse, parseUri, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult } from "@datumesh/verify";
+const k: KeysResult = keysFromResponse("rates.example.org", 404);
+const r: VerifyResult = verify("{}", k);
+const code: string = r.code;
+const ref = parseUri("cell://math.example/pi", { args: {}, returns: "number" });
+const e: DatumeshError | null = null;
+console.log(SPEC_VERSION, code, ref.fn, e);
+TS
+  cat > cjs.cts <<TS
+import lib = require("@datumesh/verify");
+const r: lib.VerifyResult = lib.verify("{}", { d712b32a2cc5cb7c: "843baeb22bfd0364fb1b7262b367fb3202e7886c69a070fecf8e343fedb1eabf" });
+console.log(r.ok);
+TS
+  npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext esm.mts cjs.cts
+  echo "types OK"'
+
 echo "PACKAGE TEST PASSED"
