@@ -24,6 +24,14 @@ for (const v of uris.filter((v) => !v.valid)) {
   });
 }
 
+test('5.3: the mesh host is a DNS name: no port, IP address or userinfo', () => {
+  const uri = 'cell://math.example/pi';
+  assert.equal(httpsUrl(uri, 'mesh.example'), 'https://mesh.example/cell/math.example/pi');
+  for (const mesh of ['mesh.example:443', '192.0.2.1', 'u@mesh.example', 'Mesh.example', 'mesh', '', 'mesh.example/x']) {
+    assert.throws(() => httpsUrl(uri, mesh), (e) => e instanceof DatumeshError && e.code === 'E_CANON_NAME', mesh);
+  }
+});
+
 test('formatUri percent-encodes every non-literal byte with uppercase hex', () => {
   const ref = { ns: 'rates.example.org', fn: 'fx_rate', args: { base: { type: 'string', value: 'a b+c/\u{FC}*' }, date: '*', quote: { type: 'string', value: '' } } };
   const uri = formatUri(ref);

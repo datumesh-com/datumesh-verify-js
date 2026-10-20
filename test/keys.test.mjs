@@ -144,3 +144,38 @@ test('fetchKeys: malformed document is E_KEY_DOC; an invalid host is never fetch
   assert.equal(r.code, 'E_KEY_UNAVAILABLE');
   assert.equal(called, false);
 });
+
+test('9.3: keys only for DNS names: a response for another host is E_KEY_DOC, no fetch is E_KEY_UNAVAILABLE', async () => {
+  for (const host of ['Rates.Example.org', 'rates.example.org.', '192.0.2.1', 'localhost', 'rates.example.org:443', 'u@rates.example.org', '']) {
+    const own = docText.replace('"rates.example.org"', JSON.stringify(host));
+    assert.equal(keysFromResponse(host, 200, own).code, 'E_KEY_DOC', host);
+    assert.equal(keysFromResponse(host, 404).code, 'E_KEY_UNAVAILABLE', host);
+    assert.equal(keysFromResponse(host, null).code, 'E_KEY_UNAVAILABLE', host);
+    assert.equal(keysFromDocument(JSON.parse(own)).code, 'E_KEY_DOC', host);
+    let called = false;
+    const r = await withFetch(async () => ((called = true), response(200, own)), () => fetchKeys(host));
+    assert.equal(r.code, 'E_KEY_UNAVAILABLE', host);
+    assert.equal(called, false, host);
+  }
+});
+
+test('9.3: fetchKeys bounds the document to 256 KiB (abandoned: E_KEY_UNAVAILABLE)', async () => {
+  const big = docText + ' '.repeat(256 * 1024);
+  const r = await withFetch(async () => response(200, big), () => fetchKeys(H));
+  assert.equal(r.code, 'E_KEY_UNAVAILABLE');
+  assert.match(r.detail, /256 KiB/);
+  const exact = docText + ' '.repeat(256 * 1024 - new TextEncoder().encode(docText).length);
+  assert.equal((await withFetch(async () => response(200, exact), () => fetchKeys(H))).code, 'OK');
+  // A streamed body is cut off as soon as it passes the bound.
+  let pulled = 0;
+  const chunk = new Uint8Array(64 * 1024).fill(0x20);
+  const stream = { getReader: () => ({ read: async () => (pulled++ < 100 ? { done: false, value: chunk } : { done: true }), cancel: async () => {} }) };
+  const s = await withFetch(async () => ({ status: 200, type: 'basic', body: stream, arrayBuffer: async () => assert.fail('must stream') }), () => fetchKeys(H));
+  assert.equal(s.code, 'E_KEY_UNAVAILABLE');
+  assert.ok(pulled <= 6, `read ${pulled} chunks`);
+});
+
+test('4.5 / 9.2: more than 64 keys is E_KEY_DOC, not E_CANON_LIMIT', () => {
+  const k = doc.keys[0];
+  assert.equal(keysFromResponse(H, 200, JSON.stringify({ ...doc, keys: Array.from({ length: 65 }, () => k) })).code, 'E_KEY_DOC');
+});
