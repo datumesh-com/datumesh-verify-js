@@ -1,6 +1,6 @@
 # @datumesh/verify
 
-Verify [Datumesh](https://datumesh.com) receipts in JavaScript: signed answers for addressable data cells, checked offline against strict RFC 8785 canonical JSON and Ed25519, following the [Datumesh specification](https://github.com/datumesh-com/datumesh-spec) revision `spec-0.2.0` and passing all of its test vectors.
+Verify [Datumesh](https://datumesh.com) receipts in JavaScript: signed answers for addressable data cells, checked offline against strict RFC 8785 canonical JSON and Ed25519, following the [Datumesh specification](https://github.com/datumesh-com/datumesh-spec) revision `spec-0.2.1` and passing all of its test vectors.
 
 ```sh
 npm install @datumesh/verify

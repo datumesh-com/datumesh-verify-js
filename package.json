@@ -1,6 +1,6 @@
 {
   "name": "@datumesh/verify",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Verifier for Datumesh receipts: strict canonical JSON (RFC 8785), cell URIs, units, blobs, response envelopes, key documents and Ed25519 signatures.",
   "license": "Apache-2.0",
   "repository": {
@@ -10,7 +10,7 @@
   "homepage": "https://datumesh.com",
   "keywords": ["datumesh", "receipt", "verify", "ed25519", "jcs", "rfc8785", "canonical-json"],
   "datumesh": {
-    "spec": "spec-0.2.0"
+    "spec": "spec-0.2.1"
   },
   "type": "module",
   "main": "./dist/cjs/index.js",

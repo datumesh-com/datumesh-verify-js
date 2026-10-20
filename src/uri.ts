@@ -1,6 +1,6 @@
 // Cell URIs (SPEC.md section 5).
 import { fail } from './errors.js';
-import { isObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
+import { isObject, memberPath, normalizeValue, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
 import { LIMITS, checkArgName, checkInstant, checkName, checkNamespace, checkTypedValue, isTypeName, type TypeName } from './lexical.js';
 import { utf8Decode, utf8Encode } from './utf8.js';
 import { validate } from './validate.js';
@@ -69,18 +69,25 @@ function encodeValue(s: string): string {
 }
 
 /**
- * SPEC 5.4: the signature is taken as given (it comes from a descriptor already checked under
- * section 7); only the declared argument names and types are used. Something that is not a
- * signature at all is a programmer error.
+ * SPEC 5.4 step 5: the signature is taken as given (it comes from a descriptor already checked
+ * under section 7), but it must be readable: an object with an `args` object whose members are
+ * objects with a string `type` (E_SCHEMA otherwise, in JCS order of names). Nothing else in it is
+ * examined; an unknown type name fails only when a value of that argument is read (step 6).
  */
 function readSignature(signature: unknown): JsonObject {
   let sig: JsonValue;
   try {
-    sig = toJson(signature);
+    sig = normalizeValue(signature, 'signature');
   } catch {
-    throw new TypeError('parseUri needs the function signature (descriptor.signature) as JSON');
+    fail('E_SCHEMA', 'the signature is not JSON data', 'signature');
   }
-  if (!isObject(sig) || !isObject(sig.args)) throw new TypeError('parseUri needs the function signature (descriptor.signature): an object with args');
+  if (!isObject(sig)) fail('E_SCHEMA', 'the signature is not an object', 'signature');
+  const args = sig.args;
+  if (!isObject(args)) fail('E_SCHEMA', 'the signature has no args object', 'signature.args');
+  for (const k of sortedKeys(args)) {
+    const d = args[k];
+    if (!isObject(d) || typeof d.type !== 'string') fail('E_SCHEMA', `the declaration of ${JSON.stringify(k)} is not an object with a string type`, memberPath('signature.args', k));
+  }
   return sig;
 }
 
@@ -91,8 +98,6 @@ function readSignature(signature: unknown): JsonObject {
  */
 export function parseUri(uri: string, signature: Signature | unknown): CellRef {
   if (typeof uri !== 'string') throw new TypeError('uri must be a string');
-  const sig = readSignature(signature);
-  const declared = sig.args as JsonObject;
 
   // 1. Outer grammar.
   if (!uri.startsWith(SCHEME) || uri.includes('#')) fail('E_PARSE_URI', 'not cell://<namespace>/<function>[?<query>] without fragment', '$');
@@ -101,8 +106,7 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
   const path = q < 0 ? rest : rest.slice(0, q);
   const query = q < 0 ? null : rest.slice(q + 1);
   if (query === '') fail('E_PARSE_URI', 'empty query', '$');
-  // SPEC 5.1 lists userinfo and a port among outer-grammar failures (E_PARSE_URI). (The
-  // reference tool reports them as E_CANON_NAME; see DEFECTS.md.)
+  // SPEC 5.1: an @ or : in the authority is userinfo or a port (E_PARSE_URI).
   const authority = path.split('/')[0];
   if (authority.includes('@')) fail('E_PARSE_URI', 'a cell URI has no userinfo', '$');
   if (authority.includes(':')) fail('E_PARSE_URI', 'a cell URI has no port', '$');
@@ -145,7 +149,9 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
   // 4. Argument count.
   if (argParams.length > LIMITS.args) fail('E_CANON_LIMIT', `more than ${LIMITS.args} arguments`, 'uri.query');
 
-  // 5. Against the signature: unknown arguments, then missing ones.
+  // 5. The signature (readable, E_SCHEMA), then the arguments against it: unknown arguments,
+  // then missing ones.
+  const declared = readSignature(signature).args as JsonObject;
   for (const p of argParams) {
     if (!Object.prototype.hasOwnProperty.call(declared, p.name)) fail('E_ARG_UNKNOWN', `function declares no argument ${JSON.stringify(p.name)}`, at(p.name));
   }
@@ -161,12 +167,8 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
       args[p.name] = '*';
       continue;
     }
-    const decl = declared[p.name];
-    const type = (isObject(decl) ? decl.type : undefined) as TypeName;
+    const type = (declared[p.name] as JsonObject).type as TypeName;
     const s = decodeValue(p.value, at(p.name));
-    // The signature is not validated (5.4), but a value is read by its declared type: a
-    // declaration without a string type is E_SCHEMA, an unknown type name E_CANON_TYPE.
-    if (typeof type !== 'string') fail('E_SCHEMA', `the signature declares ${p.name} without a string type`, `signature.args.${p.name}`);
     if (!isTypeName(type)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(type)} in the signature`, `signature.args.${p.name}.type`);
     if (type === 'boolean') {
       if (s !== 'true' && s !== 'false') fail('E_CANON_TYPE', 'boolean must be true or false', at(p.name));

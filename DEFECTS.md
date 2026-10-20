@@ -1,6 +1,7 @@
 # Places where SPEC.md was insufficient
 
-Two sections: `spec-0.2.0` (entries 19-34, this release) and `spec-0.1.1` (entries 1-18). Entries
+Sections: `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+`spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
 Found while implementing `@datumesh/verify` from SPEC.md and `vectors/` only. The source of
@@ -19,6 +20,45 @@ disagree), a **gap** (the prose does not decide the question), or **underspecifi
 exists but its exact form had to be inferred).
 
 ---
+
+# spec-0.2.1
+
+`spec-0.2.1` (drafted at spec commit `bfe5a38`, not yet tagged) is a text-only revision: every
+`spec-0.2.0` vector is byte-identical, and 19 were added (338 in all). It writes down most of the
+open entries. Re-checked against the new text and vectors; the reference tool and the library
+agree on every case of `scripts/oracle-diff.sh`.
+
+| Entry | Status at `bfe5a38` | Library change |
+|---|---|---|
+| 4 (name check order) | Resolved (4.5 "Order of checks") | none |
+| 5 (containers) | Resolved (4.5) | none |
+| 6 (`function_name` limit) | Resolved (4.5) | none |
+| 7 (JSON types of `value`) | Resolved (3) | none |
+| 8 (licence grammar) | Resolved (8.1 grammar) | none |
+| 9 (key reference codes) | Resolved (9.1) | none |
+| 10 (step 4 order) | Resolved (10.1 step 4) | none |
+| 11 (parse error order, depth) | Resolved (6.1): nesting is limited to 64 levels and checked before anything else | Limit lowered from the library's own 1,000 to 64, checked by a scan before parsing (so it wins over a duplicate member); the same limit applies to already-parsed values. A raw lone surrogate is now reported after the other parse errors, as 6.1 orders it. |
+| 12 (URI parameter names) | Resolved (5.4 step 3) | none |
+| 13 (`asof` decoding, empty path) | Resolved (5.1, 5.4 step 7) | none |
+| 14 (7.1 order) | Resolved (10.1 step 7.1) | none |
+| 15 (key documents) | Resolved (9.2, 9.3) | none |
+| 16 (Ed25519 rules) | Resolved (10.1 step 6, six new vectors) | none: the six vectors passed unchanged |
+| 17 (`stored` convention) | Resolved (7: not enforced) | none |
+| 18 (Unicode data) | Resolved (3.5) | none |
+| 32 (media type length) | Open (note only) | — |
+| 34 (unreadable signature) | Resolved (5.4 step 5) | Differs from what I had done: an unreadable signature is `E_SCHEMA` checked as a whole at step 5 (after the outer grammar, names and argument count; before unknown and missing arguments; declarations in JCS order), not when a value is read, and a signature that is not an object is `E_SCHEMA`, not `TypeError`. A signature given as a string is now a non-object (`E_SCHEMA`) rather than JSON text to parse. |
+
+Also fixed, as reported: `parseUri` used to throw `TypeError` on `invalid/uri-signature-not-object`, which ended the conformance runner and skipped the vectors after it. It now returns `E_SCHEMA`, and the runner reports any exception other than `DatumeshError` as that vector's result instead of stopping.
+
+## 35. Note: the nesting limit for values that are not text (6.1)
+
+- **Observation.** 6.1 counts nesting in the text ("`[` and `{` open at once, counted outside
+  strings"). `canonicalize`, `verify` and the other entry points also accept already-parsed
+  values, which have no text.
+- **Resolution.** The same limit, counted on the value: at most 64 arrays and objects nested
+  inside each other.
+- **Proposed wording (6.1).** "…counted outside strings; for a value that was not parsed from
+  text, the number of arrays and objects nested inside each other."
 
 # spec-0.2.0
 
@@ -76,7 +116,7 @@ changed, with tests for both sides of the boundary.
   and otherwise requires `true` exactly when `blob_hex` is given.
 - **Proposed fix.** Add `"blob_checked": true` to the valid receipt vectors with `blob_hex`.
 
-## 34. Gap: what `parse` does with a signature that is not a signature (5.4)
+## 34. Gap: what `parse` does with a signature that is not a signature (5.4) [resolved in spec-0.2.1]
 
 - **Problem.** 5.4 now says the signature "is taken as given" and not checked. It does not say
   what happens when it cannot be used: a declaration without `type`, with a non-string `type`,
@@ -349,7 +389,7 @@ changed, with tests for both sides of the boundary.
   found); verify it through step 6 (`E_INPUT_INVALID`); check that its receipt hash is the
   listed hash (`E_INPUT_UNAVAILABLE`); ..."
 
-## 4. Gap: order of checks on a name (2.2, 2.4, 4.5)
+## 4. Gap: order of checks on a name (2.2, 2.4, 4.5) [resolved in spec-0.2.1]
 
 - **Problem.** A name can fail its grammar (`E_CANON_NAME` / `E_CANON_ARG_NAME`), its 64-character
   limit (`E_CANON_LIMIT`), or the reserved-name rule (`asof`, `dm_*`; `E_CANON_ARG_NAME`). The
@@ -363,7 +403,7 @@ changed, with tests for both sides of the boundary.
   (`E_CANON_ARG_NAME` for argument names); a matching name longer than 64 characters fails with
   `E_CANON_LIMIT`; only then are reserved argument names (2.4) rejected."
 
-## 5. Gap: when counts and sets are checked (4.5, 7, 8.1, 10.1 step 3)
+## 5. Gap: when counts and sets are checked (4.5, 7, 8.1, 10.1 step 3) [resolved in spec-0.2.1]
 
 - **Problem.** "Members are examined in canonical order, depth first" does not say whether a
   container's own rules (count limit, ascending order) are checked before or after its elements.
@@ -378,7 +418,7 @@ changed, with tests for both sides of the boundary.
   count is checked before its members. For an `inputs` array, its elements are checked first,
   then that they are strictly ascending, then their number."
 
-## 6. Underspecified: length of the fully qualified name in cells, references and URIs (2.3, 4.5)
+## 6. Underspecified: length of the fully qualified name in cells, references and URIs (2.3, 4.5) [resolved in spec-0.2.1]
 
 - **Problem.** 2.3 limits `function-name` to 512 characters, but cells and references carry
   `ns` and `fn` separately, and nothing says whether `ns + "/" + fn` is limited there.
@@ -388,7 +428,7 @@ changed, with tests for both sides of the boundary.
 - **Proposed wording (4.4).** "`ns`, `/` and `fn` together are at most 512 characters
   (`E_CANON_LIMIT`, checked after the members)."
 
-## 7. Underspecified: JSON type errors in typed scalars (3, 4.1, 10.1 steps 2-3)
+## 7. Underspecified: JSON type errors in typed scalars (3, 4.1, 10.1 steps 2-3) [resolved in spec-0.2.1]
 
 - **Problem.** Section 3 says "A value whose JSON type does not match its declared type fails
   with `E_CANON_TYPE`". But `scalar-number-json-number` (`"value": 1.5` for a number) expects
@@ -401,7 +441,7 @@ changed, with tests for both sides of the boundary.
 - **Proposed wording (3).** "`value` must be a JSON string or boolean (`E_SCHEMA` otherwise). A
   string for a `boolean`, or a boolean for any other type, fails with `E_CANON_TYPE`."
 
-## 8. Underspecified: the licence grammar (8.1)
+## 8. Underspecified: the licence grammar (8.1) [resolved in spec-0.2.1]
 
 - **Problem.** "An SPDX licence identifier (`CC-BY-4.0`) or an `https://` URL" has no grammar
   in SPEC.md. It is unclear whether the identifier must be on the SPDX list, whether expressions
@@ -416,7 +456,7 @@ changed, with tests for both sides of the boundary.
   `licence = spdx-id / https-url ; spdx-id = (ALPHA / DIGIT) *(ALPHA / DIGIT / "." / "+" / "-") ; https-url = "https://" 1*%x21-7E`.
   Then: "not matching: `E_CANON_LICENCE`; then the limits of 4.5: `E_CANON_LIMIT`."
 
-## 9. Underspecified: error codes inside a key reference (8.1, 9.1, 10.2)
+## 9. Underspecified: error codes inside a key reference (8.1, 9.1, 10.2) [resolved in spec-0.2.1]
 
 - **Problem.** `E_CANON_NAME` covers "key reference" and `E_CANON_HEX` covers "key id". For
   `rates.example.org#D712B32A2CC5CB7C` either could apply.
@@ -427,7 +467,7 @@ changed, with tests for both sides of the boundary.
   fails with `E_CANON_NAME`; a key id that is not 16 lowercase hex digits fails with
   `E_CANON_HEX`."
 
-## 10. Gap: order of the step 4 checks (10.1 step 4)
+## 10. Gap: order of the step 4 checks (10.1 step 4) [resolved in spec-0.2.1]
 
 - **Problem.** "Within a step, members are examined in canonical (JCS) order". In JCS order,
   `asof` (time order) comes before `publisher` and `valid`. But the reference tool follows the
@@ -437,7 +477,7 @@ changed, with tests for both sides of the boundary.
   (for each member in JCS order: echo, then valid-time type), then time order.
 - **Proposed wording (10.1 step 4).** "These checks run in the order listed."
 
-## 11. Gap: precedence among strict-parsing failures, and what "outside the double range" means (6.1)
+## 11. Gap: precedence among strict-parsing failures, and what "outside the double range" means (6.1) [resolved in spec-0.2.1]
 
 - **Problem.** Step 1 has two codes, so a text with both a duplicate member and another fault
   needs an order. The spec also does not say whether underflow (`1e-400`) is "outside the IEEE
@@ -456,7 +496,7 @@ changed, with tests for both sides of the boundary.
   ample: Datumesh objects nest at most five deep. Any fixed limit would do, but there should be
   one.)
 
-## 12. Gap: duplicates and order in URI parameters, and where `asof` belongs (5.2, 5.4 step 3)
+## 12. Gap: duplicates and order in URI parameters, and where `asof` belongs (5.2, 5.4 step 3) [resolved in spec-0.2.1]
 
 - **Problem.** 5.4 says names are checked "left to right (grammar, reserved names, duplicates,
   order)", without saying whether "duplicate" means "equal to the previous parameter" or "seen
@@ -472,7 +512,7 @@ changed, with tests for both sides of the boundary.
     `E_CANON_ARG_DUPLICATE`.
 - **Proposed wording (5.4 step 3).** Spell out both rules as above.
 
-## 13. Gap: percent-encoding in `asof`, and an empty or missing path (5.1, 5.4)
+## 13. Gap: percent-encoding in `asof`, and an empty or missing path (5.1, 5.4) [resolved in spec-0.2.1]
 
 - **Problem.** The grammar has `asof-param = "asof=" instant`, so a percent-encoded or `*` asof
   could be an outer-grammar failure (`E_PARSE_URI`), a percent failure, or an instant failure.
@@ -485,7 +525,7 @@ changed, with tests for both sides of the boundary.
 - **Proposed wording (5.2).** "The `asof` value is percent-decoded like an argument value and
   must then be an instant."
 
-## 14. Gap: a non-canonical descriptor that hashes correctly (10.1 step 7.1)
+## 14. Gap: a non-canonical descriptor that hashes correctly (10.1 step 7.1) [resolved in spec-0.2.1]
 
 - **Problem.** 7.1 says the descriptor "must hash to `cell.fn_hash` (`E_FN_HASH_MISMATCH`) and
   be canonical (sections 6-7)", but gives no code or order for the second condition.
@@ -496,7 +536,7 @@ changed, with tests for both sides of the boundary.
   then be a canonical descriptor, failing with the code that canonicalising it on its own would
   give."
 
-## 15. Gap: key documents (9.2, 9.3)
+## 15. Gap: key documents (9.2, 9.3) [resolved in spec-0.2.1]
 
 - **Problem.** 9.2 does not say whether `public` must decode to a valid curve point, whether
   "no key may appear twice" means a repeated `id` or a repeated `public`, how the body is parsed,
@@ -512,7 +552,7 @@ changed, with tests for both sides of the boundary.
   `schemas/keydoc.schema.json`. No two keys share an `id` or a `public`. `public` is not
   required to be a valid point; a key that is not one verifies nothing."
 
-## 16. Underspecified: what step 6 requires exactly, and no vectors for it (10.1 step 6, 11)
+## 16. Underspecified: what step 6 requires exactly, and no vectors for it (10.1 step 6, 11) [resolved in spec-0.2.1]
 
 - **Problem.** Step 6 says "as libsodium does", but there are no vectors for `S >= L`,
   small-order `R` or `A`, non-canonical encodings, or mixed-order `A`. The text does not say
@@ -529,7 +569,7 @@ changed, with tests for both sides of the boundary.
   accept exactly when the encoding of `[S]B - [k]A` equals the 32 bytes of `R`. (Mixed-order `A`
   is not rejected.)" Add vectors for each rule.
 
-## 17. Underspecified: conventions for `stored` functions (7)
+## 17. Underspecified: conventions for `stored` functions (7) [resolved in spec-0.2.1]
 
 - **Problem.** "`stored` means the function is a table of recorded values; by convention its
   body is empty and it declares no inputs." It is unclear whether this is a rule.
@@ -538,7 +578,7 @@ changed, with tests for both sides of the boundary.
 - **Proposed wording (7).** Either "A `stored` descriptor has an empty body and no inputs
   (`E_SCHEMA`)" or "...by convention, not enforced".
 
-## 18. Note: engines' Unicode tables cannot be trusted for 3.5 (3.5)
+## 18. Note: engines' Unicode tables cannot be trusted for 3.5 (3.5) [resolved in spec-0.2.1]
 
 - **Observation (not a defect in the rules).** Node 18.0.0 ships Unicode 14.0. Its
   `String.prototype.normalize` treats U+1E08F (assigned in 15.0, combining class 230) as

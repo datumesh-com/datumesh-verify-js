@@ -10,11 +10,27 @@ export interface JsonObject {
 }
 
 /**
- * Nesting deeper than this is rejected with E_PARSE_JSON. SPEC.md sets no depth limit; this is
- * an implementation limit (Datumesh objects nest at most five levels) that keeps parsing and
- * canonicalisation from exhausting the call stack.
+ * SPEC 6.1: at most 64 levels of nesting ([ and { open at once, counted outside strings), checked
+ * before anything else in the text. Datumesh objects nest at most five levels.
  */
-export const MAX_DEPTH = 1000;
+export const MAX_DEPTH = 64;
+
+/** SPEC 6.1 order step 3: true when more than MAX_DEPTH brackets are open at once. */
+function tooDeep(s: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // skip the escaped character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) inString = true;
+    else if (c === 0x5b || c === 0x7b) {
+      if (++depth > MAX_DEPTH) return true;
+    } else if (c === 0x5d || c === 0x7d) depth--;
+  }
+  return false;
+}
 
 export function isObject(v: unknown): v is JsonObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -69,7 +85,7 @@ class Parser {
   }
 
   private value(path: string, depth: number): JsonValue {
-    if (depth > MAX_DEPTH) this.err(`nesting deeper than ${MAX_DEPTH} levels (implementation limit)`);
+    if (depth > MAX_DEPTH) this.err(`nesting deeper than ${MAX_DEPTH} levels`); // tooDeep found it first
     const s = this.s;
     const c = s[this.i];
     if (c === '{') return this.object(path, depth);
@@ -242,10 +258,13 @@ class Parser {
 
 /** Parse JSON text strictly. */
 export function parseJsonText(text: string, numbers?: Map<string, string>): JsonValue {
+  // SPEC 6.1 order: BOM, (invalid UTF-8: parseJsonBytes), nesting, the first of syntax / NaN /
+  // overflow / duplicate in text order, then lone surrogates.
   if (text.charCodeAt(0) === 0xfeff) fail('E_PARSE_JSON', 'byte order mark', '$');
-  if (hasLoneSurrogate(text)) fail('E_PARSE_JSON', 'lone surrogate in the text', '$');
+  if (tooDeep(text)) fail('E_PARSE_JSON', `nesting deeper than ${MAX_DEPTH} levels`, '$');
   const p = new Parser(text, numbers);
   const v = p.parseDocument();
+  if (hasLoneSurrogate(text)) fail('E_PARSE_JSON', 'lone surrogate in the text', '$');
   if (p.surrogatePath !== null) fail('E_PARSE_JSON', 'lone surrogate', p.surrogatePath);
   return v;
 }
@@ -267,7 +286,8 @@ export function parseJsonBytes(bytes: Uint8Array, numbers?: Map<string, string>)
  * or bytes for that.
  */
 export function normalizeValue(v: unknown, path = '$', depth = 0): JsonValue {
-  if (depth > MAX_DEPTH) fail('E_PARSE_JSON', `nesting deeper than ${MAX_DEPTH} levels (or a cycle)`, path);
+  const container = typeof v === 'object' && v !== null;
+  if (container && depth >= MAX_DEPTH) fail('E_PARSE_JSON', `nesting deeper than ${MAX_DEPTH} levels (or a cycle)`, path);
   if (v === null || typeof v === 'boolean') return v;
   if (typeof v === 'number') {
     if (!Number.isFinite(v)) fail('E_PARSE_JSON', 'NaN and Infinity are not JSON', path);

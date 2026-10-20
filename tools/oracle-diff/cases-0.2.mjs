@@ -75,13 +75,20 @@ for (const value of [`${H}:17:text/plain`, `${H}::text/plain`, `${H}:017:text/pl
   add({ kind: 'uri', input: `cell://files.example.org/describe?file=${value.replace(/[^A-Za-z0-9\-._~:]/g, (c) => [...new TextEncoder().encode(c)].map((b) => `%${b.toString(16).toUpperCase().padStart(2, '0')}`).join(''))}`, signature: { args: { file: { type: 'blob', valid: false } }, returns: 'string' } });
 }
 // URIs with signatures that are not valid descriptors (SPEC 5.4: taken as given)
-// (Declarations without a type are left out: the reference tool crashes on them, DEFECTS.md 34.)
-for (const decl of [{ type: 'decimal', valid: false }, { type: 'string' }, { type: 5 }, { type: true, valid: false }, { type: 'number', valid: false }, { type: 'string', unit: 'EUR', valid: 'x' }, { type: 'blob', valid: true }]) {
+for (const decl of [{ type: 'decimal', valid: false }, { type: 'string' }, { type: 5 }, { type: true, valid: false }, { type: 'number', valid: false }, { type: 'string', unit: 'EUR', valid: 'x' }, { type: 'blob', valid: true }, { valid: false }, {}, 'x', null]) {
   for (const value of ['EUR', '*', '1', '%2A', 'Bad%ZZ', '']) {
     add({ kind: 'uri', input: `cell://a.example/f?base=${value}`, signature: { args: { base: decl }, returns: pick(['number', 'decimal', { type: 'number' }, 'string']) } });
   }
 }
-for (const uri of ['cell://u@a.example/f?base=x', 'cell://a.example:443/f?base=x', 'cell://a.example:/f', 'cell://a.example:x/f', 'cell://A.example/f?base', 'cell://a.example/F?base&x=1', 'cell://a.example/f?', 'cell://a.example/f#x', 'cell://a.example/f?base=x&&']) {
+for (const sig of [5, 'x', null, [], {}, { args: 5 }, { args: [] }, { args: { base: 'string' } }]) {
+  for (const uri of ['cell://a.example/f?base=x', 'cell://a.example/f#x', 'cell://A.example/f?base=x', 'cell://a.example/f?zz=1']) add({ kind: 'uri', input: uri, signature: sig });
+}
+for (const depth of [63, 64, 65]) {
+  add({ kind: 'jcs', input: '['.repeat(depth) + ']'.repeat(depth) });
+  add({ kind: 'jcs', input: '[{"a":1,"a":2},' + '['.repeat(depth - 1) + ']'.repeat(depth - 1) + ']' });
+  add({ kind: 'jcs', input: '["[[[",' + '{"a":'.repeat(depth - 1) + '1' + '}'.repeat(depth - 1) + ']' });
+}
+for (const uri of ['cell://a.example/f?base=b=c', 'cell://a.example/f?base=x&asof=*', 'cell://a.example/f?base=x&asof=', 'cell://u@a.example/f?base=x', 'cell://a.example:443/f?base=x', 'cell://a.example:/f', 'cell://a.example:x/f', 'cell://A.example/f?base', 'cell://a.example/F?base&x=1', 'cell://a.example/f?', 'cell://a.example/f#x', 'cell://a.example/f?base=x&&']) {
   add({ kind: 'uri', input: uri, signature: { args: { base: { type: 'string', valid: false } }, returns: 'string' } });
 }
 const bv = byId['receipt/blob-value'];

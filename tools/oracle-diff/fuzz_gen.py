@@ -86,7 +86,7 @@ if MODE == 'random':
             if isinstance(r, dict) and random.random() < 0.6 and isinstance(r.get('computed_by'), str):
                 try: r = sign(r, r['computed_by'].split('#')[-1] if r['computed_by'].split('#')[-1] in SEEDS else None)
                 except Exception: pass
-            add({'kind': 'receipt', 'input': json.dumps(r, ensure_ascii=False), 'keypair': rv['keypair'], 'keys': rv['keys']})
+            add({'kind': 'receipt', 'input': json.dumps(r, ensure_ascii=False), 'keypair': rv.get('keypair'), 'keys': rv['keys']})
         elif kind == 'recompute':
             rc = copy.deepcopy(CW['recompute']); r = json.loads(CW['input'])
             which = random.random()
@@ -158,7 +158,7 @@ elif MODE == 'semantic':
         if random.random() < 0.5:
             rv = random.choice(receipts)
             r = signed(sem(json.loads(rv['input'])))
-            add({'kind': 'receipt', 'input': json.dumps(r, ensure_ascii=False), 'keypair': rv['keypair'], 'keys': rv['keys']})
+            add({'kind': 'receipt', 'input': json.dumps(r, ensure_ascii=False), 'keypair': rv.get('keypair'), 'keys': rv['keys']})
             continue
         base = random.choice([CW, SN])
         rc = copy.deepcopy(base['recompute']); r = json.loads(base['input'])
@@ -210,14 +210,14 @@ else:
             if v['kind'] != 'receipt':
                 w = {'kind': v['kind'], 'input_hex': bytes(b).hex()}
             else:
-                try: w = {'kind': 'receipt', 'input': bytes(b).decode('utf-8'), 'keypair': v['keypair'], 'keys': v['keys']}
+                try: w = {'kind': 'receipt', 'input': bytes(b).decode('utf-8'), 'keypair': v.get('keypair'), 'keys': v['keys']}
                 except UnicodeDecodeError: continue
         else:
             for _ in range(random.choice([1, 1, 2])):
                 j = random.randrange(len(t) + 1)
                 t = t[:j] + random.choice(SNIPS) + t[j + random.choice([0, 0, 1]):]
             w = {'kind': v['kind'], 'input': t}
-            if v['kind'] == 'receipt': w.update(keypair=v['keypair'], keys=v['keys'])
+            if v['kind'] == 'receipt': w.update(keypair=v.get('keypair'), keys=v['keys'])
         add(w)
 
 # Run the reference tool in batches.
