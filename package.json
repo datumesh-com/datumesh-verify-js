@@ -40,7 +40,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "npm run build && node --test test/",
+    "test": "npm run build && node scripts/run-tests.mjs",
     "conformance": "node tools/check-vectors.mjs",
     "prepack": "npm run build"
   },

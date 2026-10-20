@@ -1,0 +1,594 @@
+[
+ {
+  "name": "honest",
+  "why": "an ordinary signature",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": true
+ },
+ {
+  "name": "rfc8032-test1",
+  "why": "RFC 8032 section 7.1 TEST 1",
+  "pub": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "msg": "",
+  "sig": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+  "libsodium": true
+ },
+ {
+  "name": "s-plus-l",
+  "why": "S >= L (S + L): non-canonical scalar",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e11725f106ebbfc10213ea81f65f791d19c748b3f7d5b7f0738272c19d98ab3c11",
+  "libsodium": false
+ },
+ {
+  "name": "s-all-ones",
+  "why": "S far above L",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-0",
+  "why": "R = 0*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "01000000000000000000000000000000000000000000000000000000000000001356271907078fadf9f87c44998a7c03fc1925ecf0b9cd638f102dad65891e02",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-0",
+  "why": "A = 0*T8 (small order)",
+  "pub": "0100000000000000000000000000000000000000000000000000000000000000",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-1",
+  "why": "R = 1*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05b3c7bbecbf22e957e1d222f483049dd1720874e925e507e49ac5243a7fead30e",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-1",
+  "why": "A = 1*T8 (small order)",
+  "pub": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-2",
+  "why": "R = 2*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "00000000000000000000000000000000000000000000000000000000000000009a0d068ed5a297e9296a66585bfe689591452913d78c4065fb2b6dbb12e2870a",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-2",
+  "why": "A = 2*T8 (small order)",
+  "pub": "0000000000000000000000000000000000000000000000000000000000000000",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-3",
+  "why": "R = 3*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037afbaf485b2fe7ccad546947a893f80a9e889a9c40e286e168d093a69f931f210b",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-3",
+  "why": "A = 3*T8 (small order)",
+  "pub": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-4",
+  "why": "R = 4*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fa1a3b4f77cf704595ea97f0ebaff9cc2aaacbe1c0307eb050c9304d1e0a83b0a",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-4",
+  "why": "A = 4*T8 (small order)",
+  "pub": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-5",
+  "why": "R = 5*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa68f2cedf20275155cd01f43eff5e5e2177906a66ff9ff0fdbabe57d4fb2ef80e",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-5",
+  "why": "A = 5*T8 (small order)",
+  "pub": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-6",
+  "why": "R = 6*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "0000000000000000000000000000000000000000000000000000000000000080495327db35ce38e3769b6f47c0cb73d8ddcff4bdf30dcb30058762b583516c02",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-6",
+  "why": "A = 6*T8 (small order)",
+  "pub": "0000000000000000000000000000000000000000000000000000000000000080",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-R-7",
+  "why": "R = 7*T8 (small order), S = k*a",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85a5e3902afe77dd6a61c44b13896c76a1e2dfd6996678fad77784fe047688d503",
+  "libsodium": false
+ },
+ {
+  "name": "small-order-A-7",
+  "why": "A = 7*T8 (small order)",
+  "pub": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "identity-A-forged",
+  "why": "A = identity: [S]B - [k]A = R holds for every message",
+  "pub": "0100000000000000000000000000000000000000000000000000000000000000",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "ef4f62f8479733ad879cfaced3c89a9c39dd4fc795ef2efa1c3eafe4d729a0813930000000000000000000000000000000000000000000000000000000000000",
+  "libsodium": false
+ },
+ {
+  "name": "mixed-order-A-k-not-0-mod-8",
+  "why": "A' = A + T8, k mod 8 != 0: cofactored equation holds, cofactorless fails",
+  "pub": "b154bd62188ae283dd187fefe8c31f5e276edf083b4cff11c9d5cff856c74440",
+  "msg": "646174756d65736820737472696374206564323535313900",
+  "sig": "c756ec323dff09437e6db6301f334b0515b088f4f26142d5c6beea4f3f310d937507c95db4aedc810ce6093abeb531ccfeecf3ee2ea0c187b92d24b519733a0b",
+  "libsodium": false
+ },
+ {
+  "name": "mixed-order-A-k-0-mod-8",
+  "why": "A' = A + T8, k = 0 mod 8: both equations hold",
+  "pub": "b154bd62188ae283dd187fefe8c31f5e276edf083b4cff11c9d5cff856c74440",
+  "msg": "646174756d65736820737472696374206564323535313903",
+  "sig": "06cf4119a81486e234a63c571929233c4b1b5f5325622cac9cec0c2f979437bcccab7d80072ffff9c5e517b418451e2f80e341ee951c66cd7452dce9b3ef1e05",
+  "libsodium": true
+ },
+ {
+  "name": "noncanonical-A-y0-s0",
+  "why": "A encoded with y + p (small order: True)",
+  "pub": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y0-s0",
+  "why": "R encoded with y + p (small order: True)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y0-s1",
+  "why": "A encoded with y + p (small order: True)",
+  "pub": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y0-s1",
+  "why": "R encoded with y + p (small order: True)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y1-s0",
+  "why": "A encoded with y + p (small order: True)",
+  "pub": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y1-s0",
+  "why": "R encoded with y + p (small order: True)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y3-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y3-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y3-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y3-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y4-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y4-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y4-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y4-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y5-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y5-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y5-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y5-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f2ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y6-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y6-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y6-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y6-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y9-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y9-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y9-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y9-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y10-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y10-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y10-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y10-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y14-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y14-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y14-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y14-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y15-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y15-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y15-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y15-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fcffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y16-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y16-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y16-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y16-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "fdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y18-s0",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y18-s0",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-A-y18-s1",
+  "why": "A encoded with y + p (small order: False)",
+  "pub": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "noncanonical-R-y18-s1",
+  "why": "R encoded with y + p (small order: False)",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "neg-zero-A-y1",
+  "why": "A with x = 0 and the sign bit set",
+  "pub": "0100000000000000000000000000000000000000000000000000000000000080",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "neg-zero-A-yp-1",
+  "why": "A with x = 0 and the sign bit set",
+  "pub": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "A-not-on-curve",
+  "why": "A is not a curve point",
+  "pub": "0200000000000000000000000000000000000000000000000000000000000000",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "R-not-on-curve",
+  "why": "R is not a curve point",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d657368207374726963742065643235353139",
+  "sig": "02000000000000000000000000000000000000000000000000000000000000002a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ },
+ {
+  "name": "wrong-message",
+  "why": "signature over another message",
+  "pub": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "msg": "646174756d65736820737472696374206564323535313921",
+  "sig": "87729f212490a9892aaf75ed6cf705d377fcbb726fd55144510aac15fcbcb9e12a51fba9d05cafaa3c4d8a53817f3e04c748b3f7d5b7f0738272c19d98ab3c01",
+  "libsodium": false
+ }
+]

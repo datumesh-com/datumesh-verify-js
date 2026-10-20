@@ -6,10 +6,10 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { OUTPUTS } from './vector-runner.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = join(root, 'spec', 'vectors');
-export const OUTPUTS = { jcs: ['canonical', 'sha256'], scalar: ['canonical', 'sha256'], cell: ['canonical', 'sha256'], ref: ['canonical', 'sha256'], function: ['canonical', 'sha256'], uri: ['object', 'canonical', 'sha256', 'https'], keyid: ['key_id'], keys: ['key_ids'], receipt: ['canonical', 'sha256', 'sig', 'level'] };
 
 export function loadVectors() {
   const vs = [];
@@ -35,16 +35,16 @@ export function compare(v, got) {
   return problems;
 }
 
-export function runAll() {
+export function runAll(env = {}) {
   const vs = loadVectors();
-  const stdout = execFileSync(process.execPath, [join(root, 'tools', 'run-vectors.mjs')], { input: vs.map((v) => JSON.stringify(v)).join('\n') + '\n', maxBuffer: 1 << 28 }).toString();
+  const stdout = execFileSync(process.execPath, [join(root, 'tools', 'run-vectors.mjs')], { input: vs.map((v) => JSON.stringify(v)).join('\n') + '\n', maxBuffer: 1 << 28, env: { ...process.env, ...env } }).toString();
   const lines = stdout.trim().split('\n').map((l) => JSON.parse(l));
   if (lines.length !== vs.length) throw new Error(`runner produced ${lines.length} lines for ${vs.length} vectors`);
   return vs.map((v, i) => ({ v, got: lines[i], problems: compare(v, lines[i]) }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const results = runAll();
+  const results = runAll({ DATUMESH_BUILD: process.argv[2] === 'cjs' ? 'cjs' : 'esm' });
   const summary = {};
   let bad = 0;
   for (const { v, problems } of results) {
