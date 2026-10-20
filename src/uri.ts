@@ -95,6 +95,11 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
   const path = q < 0 ? rest : rest.slice(0, q);
   const query = q < 0 ? null : rest.slice(q + 1);
   if (query === '') fail('E_PARSE_URI', 'empty query', '$');
+  // SPEC 5.1 lists userinfo and a port among outer-grammar failures (E_PARSE_URI). (The
+  // reference tool reports them as E_CANON_NAME; see DEFECTS.md.)
+  const authority = path.split('/')[0];
+  if (authority.includes('@')) fail('E_PARSE_URI', 'a cell URI has no userinfo', '$');
+  if (authority.includes(':')) fail('E_PARSE_URI', 'a cell URI has no port', '$');
   const params = (query === null ? [] : query.split('&')).map((p) => {
     const e = p.indexOf('=');
     if (e < 0) fail('E_PARSE_URI', `parameter without '=': ${JSON.stringify(p)}`, '$');
@@ -112,13 +117,16 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
 
   // 3. Parameter names, left to right.
   const at = (n: string) => `uri.query.${n}`;
+  // asof: when the last parameter is asof, that is the asof parameter and any earlier asof is a
+  // repetition (E_CANON_ARG_DUPLICATE); otherwise an asof anywhere is out of place
+  // (E_CANON_ARG_ORDER). SPEC 5.2 does not say which applies when both do; this matches the
+  // reference tool (DEFECTS.md).
   let prev: string | null = null;
-  let asofSeen = false;
+  const lastIsAsof = params.length > 0 && params[params.length - 1].name === 'asof';
   params.forEach((p, i) => {
     if (p.name === 'asof') {
-      if (asofSeen) fail('E_CANON_ARG_DUPLICATE', 'asof repeated', at(p.name));
-      if (params.slice(i + 1).some((r) => r.name !== 'asof')) fail('E_CANON_ARG_ORDER', 'asof appears once, as the last parameter', at(p.name));
-      asofSeen = true;
+      if (!lastIsAsof) fail('E_CANON_ARG_ORDER', 'asof appears once, as the last parameter', at(p.name));
+      if (i !== params.length - 1) fail('E_CANON_ARG_DUPLICATE', 'asof repeated', at(p.name));
       return;
     }
     checkArgName(p.name, at(p.name));
