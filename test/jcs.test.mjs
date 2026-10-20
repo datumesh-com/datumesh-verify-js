@@ -82,6 +82,12 @@ test('strict parsing (SPEC 6.1) before canonicalisation', () => {
     ["['a']", 'E_PARSE_JSON'],
     ['["\ud800"]', 'E_PARSE_JSON'],
     ['['.repeat(1002) + ']'.repeat(1002), 'E_PARSE_JSON'],
+    ['['.repeat(65) + ']'.repeat(65), 'E_PARSE_JSON'],
+    ['{"a":'.repeat(65) + '1' + '}'.repeat(65), 'E_PARSE_JSON'],
+    // Nesting is checked before anything else in the text (SPEC 6.1 order, step 3).
+    ['[{"a":1,"a":2},' + '['.repeat(64) + ']'.repeat(64) + ']', 'E_PARSE_JSON'],
+    ['[NaN,' + '['.repeat(65), 'E_PARSE_JSON'],
+    ['[{"a":1,"a":2},' + '['.repeat(63) + ']'.repeat(63) + ']', 'E_PARSE_DUPLICATE_KEY'],
   ];
   for (const [t, code] of bad) {
     assert.throws(() => canonicalize(t, 'jcs'), (e) => e instanceof DatumeshError && e.code === code, JSON.stringify(t).slice(0, 60));
@@ -98,10 +104,17 @@ test('strict parsing (SPEC 6.1) before canonicalisation', () => {
     assert.throws(() => canonicalize(Uint8Array.from(b), 'jcs'), (e) => e.code === 'E_PARSE_JSON', why);
   }
   // Accepted: underflow to zero is within the double range; escapes are decoded; the
-  // canonical form of -0 is 0; nesting up to the implementation limit.
+  // canonical form of -0 is 0; nesting up to 64 levels, brackets inside strings not counted.
   assert.equal(text(canonicalize('[1e-400, -0, 0.0]', 'jcs')), '[0,0,0]');
   assert.equal(text(canonicalize('{"\\ud83d\\ude00":"\\u00e9\\/"}', 'jcs')), '{"\u{1F600}":"\u{E9}/"}');
-  assert.equal(text(canonicalize('['.repeat(1000) + ']'.repeat(1000), 'jcs')), '['.repeat(1000) + ']'.repeat(1000));
+  assert.equal(text(canonicalize('['.repeat(64) + ']'.repeat(64), 'jcs')), '['.repeat(64) + ']'.repeat(64));
+  const strings = `[${'"[[{{\\"[",'.repeat(70)}${'['.repeat(63)}${']'.repeat(63)}]`;
+  assert.equal(canonicalize(strings, 'jcs').length > 0, true);
+  // The same limit for already-parsed values.
+  let deep = [];
+  for (let i = 1; i < 64; i++) deep = [deep];
+  assert.equal(text(canonicalize(deep, 'jcs')), '['.repeat(64) + ']'.repeat(64));
+  assert.throws(() => canonicalize([deep], 'jcs'), (e) => e.code === 'E_PARSE_JSON');
 });
 
 test('parsed values are checked against the JSON data model', () => {

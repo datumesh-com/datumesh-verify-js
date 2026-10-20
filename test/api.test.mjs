@@ -14,8 +14,8 @@ const keys = Object.entries(stored.keys).map(([h, e]) => keysFromResponse(h, e.h
 
 test('SPEC_VERSION and package metadata', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(SPEC_VERSION, 'spec-0.2.0');
-  assert.equal(esm.VERSION, '0.2.0');
+  assert.equal(SPEC_VERSION, 'spec-0.2.1');
+  assert.equal(esm.VERSION, '0.2.1');
   assert.equal(pkg.datumesh.spec, SPEC_VERSION);
   assert.equal(pkg.version, esm.VERSION);
   assert.equal(pkg.name, '@datumesh/verify');

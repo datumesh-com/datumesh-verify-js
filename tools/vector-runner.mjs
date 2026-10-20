@@ -138,7 +138,9 @@ export function makeRunner(lib, sha256) {
       }
     } catch (e) {
       if (e instanceof lib.DatumeshError) return { id: v.id, error: e.code };
-      throw e;
+      // Anything else is a bug (or a programmer error the vector provokes). Report it as this
+      // vector's result, so one vector cannot stop the runner and hide the vectors after it.
+      return { id: v.id, error: `THREW ${e && e.name}: ${e && e.message}` };
     }
     return out;
   };

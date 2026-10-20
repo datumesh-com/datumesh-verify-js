@@ -52,8 +52,17 @@ test('parseUri takes the signature as given (SPEC 5.4) and uses only argument ty
   assert.throws(() => parseUri('cell://a.example/f?base=EUR', { args: { base: { type: 5, valid: false } }, returns: 'string' }), (e) => e.code === 'E_SCHEMA');
   assert.throws(() => parseUri('cell://a.example/f?base=EUR', { args: { base: { valid: false } }, returns: 'string' }), (e) => e.code === 'E_SCHEMA');
   assert.throws(() => parseUri('cell://a.example/f?base=%zz', { args: { base: { type: 'decimal', valid: false } }, returns: 'string' }), (e) => e.code === 'E_CANON_PERCENT');
-  // Something that is not a signature at all is a programmer error.
-  for (const bad of [null, undefined, 5, 'x', { returns: 'string' }, { args: 5 }]) assert.throws(() => parseUri('cell://math.example/pi', bad), TypeError);
+  // An unreadable signature is E_SCHEMA (5.4 step 5): after the outer grammar, names and the
+  // argument count, before unknown and missing arguments; declarations in JCS order of names.
+  for (const bad of [null, undefined, 5, 'x', '{"args":{}}', [], { returns: 'string' }, { args: 5 }, { args: [] }, { args: { a: 'string' } }, { args: { a: {} } }, { args: { a: null } }]) {
+    assert.throws(() => parseUri('cell://math.example/pi', bad), (e) => e.code === 'E_SCHEMA', JSON.stringify(bad));
+  }
+  assert.throws(() => parseUri('cell://math.example/pi#x', 5), (e) => e.code === 'E_PARSE_URI');
+  assert.throws(() => parseUri('cell://Math.example/pi', 5), (e) => e.code === 'E_CANON_NAME');
+  assert.throws(() => parseUri('cell://math.example/pi?b=1&a=1', 5), (e) => e.code === 'E_CANON_ARG_ORDER');
+  assert.throws(() => parseUri('cell://math.example/pi?zz=1', { args: { a: {} } }), (e) => e.code === 'E_SCHEMA');
+  assert.throws(() => parseUri('cell://math.example/pi?zz=1', { args: { b: { type: 'string' }, a: { type: 5 } } }), (e) => e.code === 'E_SCHEMA' && /\ba\b/.test(e.path));
+  assert.throws(() => parseUri('cell://math.example/pi?zz=1', { args: { a: { type: 'decimal' } } }), (e) => e.code === 'E_ARG_UNKNOWN');
 });
 
 test('outer grammar first (SPEC 5.1, 5.4 step 1): userinfo, port, empty parameter', () => {
@@ -64,6 +73,18 @@ test('outer grammar first (SPEC 5.1, 5.4 step 1): userinfo, port, empty paramete
   // A colon or @ elsewhere in the path is an invalid name, not a port.
   assert.throws(() => parseUri('cell://rates.example.org/a:b/fx_rate?base=x', sig), (e) => e.code === 'E_CANON_NAME');
   assert.throws(() => parseUri('cell://rates.example.org', sig), (e) => e.code === 'E_CANON_NAME');
+});
+
+test('SPEC 0.2.1 statements on URIs: = inside a value, asof decoding, non-adjacent repeats', () => {
+  const sig = { args: { a: { type: 'string', valid: false }, b: { type: 'string', valid: false } }, returns: 'string' };
+  assert.throws(() => parseUri('cell://x.example/f?a=b=c&b=1', sig), (e) => e.code === 'E_CANON_PERCENT');
+  assert.throws(() => parseUri('cell://x.example/f?a=1&b=1&asof=*', sig), (e) => e.code === 'E_CANON_PERCENT');
+  assert.throws(() => parseUri('cell://x.example/f?a=1&b=1&asof=2024-03-16T09%3A00%3A00.000000Z', sig), (e) => e.code === 'E_CANON_PERCENT');
+  assert.throws(() => parseUri('cell://x.example/f?a=1&b=1&asof=', sig), (e) => e.code === 'E_CANON_INSTANT');
+  assert.throws(() => parseUri('cell://x.example/f?a=1&b=1&a=1', sig), (e) => e.code === 'E_CANON_ARG_ORDER');
+  assert.throws(() => parseUri('cell://x.example/f?a=1&dm_x=1&a=1', sig), (e) => e.code === 'E_CANON_ARG_NAME');
+  assert.throws(() => parseUri(`cell://x.example/f?${'a'.repeat(65)}=1`, sig), (e) => e.code === 'E_CANON_LIMIT');
+  for (const u of ['cell://x.example', 'cell://x.example/', 'cell://x.example//f', 'cell://f']) assert.throws(() => parseUri(u, sig), (e) => e.code === 'E_CANON_NAME', u);
 });
 
 test('asof placement: a trailing asof is the parameter, earlier ones repeat it', () => {
