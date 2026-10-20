@@ -74,6 +74,16 @@ for (const value of [`${H}:17:text/plain`, `${H}::text/plain`, `${H}:017:text/pl
   add({ kind: 'scalar', input: JSON.stringify({ type: 'blob', value }) });
   add({ kind: 'uri', input: `cell://files.example.org/describe?file=${value.replace(/[^A-Za-z0-9\-._~:]/g, (c) => [...new TextEncoder().encode(c)].map((b) => `%${b.toString(16).toUpperCase().padStart(2, '0')}`).join(''))}`, signature: { args: { file: { type: 'blob', valid: false } }, returns: 'string' } });
 }
+// URIs with signatures that are not valid descriptors (SPEC 5.4: taken as given)
+// (Declarations without a type are left out: the reference tool crashes on them, DEFECTS.md 34.)
+for (const decl of [{ type: 'decimal', valid: false }, { type: 'string' }, { type: 5 }, { type: true, valid: false }, { type: 'number', valid: false }, { type: 'string', unit: 'EUR', valid: 'x' }, { type: 'blob', valid: true }]) {
+  for (const value of ['EUR', '*', '1', '%2A', 'Bad%ZZ', '']) {
+    add({ kind: 'uri', input: `cell://a.example/f?base=${value}`, signature: { args: { base: decl }, returns: pick(['number', 'decimal', { type: 'number' }, 'string']) } });
+  }
+}
+for (const uri of ['cell://u@a.example/f?base=x', 'cell://a.example:443/f?base=x', 'cell://a.example:/f', 'cell://a.example:x/f', 'cell://A.example/f?base', 'cell://a.example/F?base&x=1', 'cell://a.example/f?', 'cell://a.example/f#x', 'cell://a.example/f?base=x&&']) {
+  add({ kind: 'uri', input: uri, signature: { args: { base: { type: 'string', valid: false } }, returns: 'string' } });
+}
 const bv = byId['receipt/blob-value'];
 const content = Buffer.from(bv.blob_hex, 'hex');
 const receiptVec = (blobHex, extra = {}) => ({ kind: 'receipt', input: bv.input, keypair: bv.keypair, keys: bv.keys, ...(blobHex === null ? {} : { blob_hex: blobHex }), ...extra });
@@ -89,6 +99,11 @@ add(receiptVec(content.subarray(1).toString('hex')));
 add(receiptVec(Buffer.concat([content, Buffer.from([0])]).toString('hex')));
 const sn = byId['receipt/stored-number'];
 add({ kind: 'receipt', input: sn.input, keypair: sn.keypair, keys: sn.keys, blob_hex: '00' });
+add({ kind: 'receipt', input: sn.input, keypair: sn.keypair, keys: sn.keys, blob_hex: '' });
+add({ kind: 'receipt', input: sn.input, keypair: sn.keypair, keys: sn.keys, recompute: sn.recompute, blob_hex: '00' });
+const bvr = byId['receipt/blob-value-recomputed'];
+add({ kind: 'receipt', input: bvr.input, keypair: bvr.keypair, keys: bvr.keys, recompute: bvr.recompute, blob_hex: '00' });
+add({ kind: 'receipt', input: bvr.input, keypair: bvr.keypair, keys: bvr.keys, recompute: { ...bvr.recompute, value: { type: 'blob', value: `${H}:17:text/plain` } }, blob_hex: '00' });
 
 // ---- unit resolution
 const unitBases = all.filter((v) => v.kind === 'unit').map((v) => JSON.parse(v.input));
@@ -108,9 +123,9 @@ for (let i = 0; i < N / 3; i++) {
 
 // ---- envelopes
 const envBases = all.filter((v) => v.kind === 'envelope');
-const ENV_POOL = ['ok', 'stale', 'error', 'primary', 'verified', 'unverified', 'trusted', 0, -1, 1.5, 9007199254740991, 9007199254740992, true, null, '', 'x', 'E_SIGNATURE', 'E_TEAPOT', 'f'.repeat(64), 'F'.repeat(64), { amount: '1', authorise: 'https://a.example/', currency: 'EUR' }, { amount: '0', authorise: 'https://a.example/', currency: 'EUR' }, { amount: '1', authorise: 'http://a.example/', currency: 'EUR' }, { amount: '1', authorise: 'https://a.example/', currency: 'XXX' }, 'Zürich', 'a\u0007'];
+const ENV_POOL = ['ok', 'stale', 'error', 'bad_request', 'E_PARSE_URI', 'E_ENVELOPE', 'E_ARG_MISSING', 'E_KEY_DOC', 'primary', 'verified', 'unverified', 'trusted', 0, -1, 1.5, 9007199254740991, 9007199254740992, true, null, '', 'x', 'E_SIGNATURE', 'E_TEAPOT', 'f'.repeat(64), 'F'.repeat(64), { amount: '1', authorise: 'https://a.example/', currency: 'EUR' }, { amount: '0', authorise: 'https://a.example/', currency: 'EUR' }, { amount: '1', authorise: 'http://a.example/', currency: 'EUR' }, { amount: '1', authorise: 'https://a.example/', currency: 'XXX' }, 'Zürich', 'a\u0007'];
 const MEMBERS = ['outcome', 'receipt', 'trust', 'age_seconds', 'superseded_by', 'reason', 'quote', 'retry_after_seconds', 'error'];
-const STATUSES = [200, 402, 403, 404, 429, 500, 503, 599, 600, 400];
+const STATUSES = [200, 402, 403, 404, 429, 500, 503, 599, 600, 400, 401];
 for (let i = 0; i < N; i++) {
   const v = pick(envBases);
   const body = JSON.parse(v.input);
@@ -126,13 +141,18 @@ for (let i = 0; i < N; i++) {
       body[k] = donor[k];
     } else body[pick(MEMBERS)] = clone(pick(ENV_POOL));
   }
-  add({ kind: 'envelope', input: JSON.stringify(body), status, keys: v.keys });
+  let request = v.request;
+  const q = rand(12);
+  if (q === 0) request = { cell_id: 'e920bb15287699a37973578621cd346a7411270ad08cf1cbd3cbaaa5096aa608' };
+  else if (q === 1) request = { cell_id: v.request.cell_id, asof: '2024-03-17T09:00:00.000000Z' };
+  else if (q === 2) request = { cell_id: v.request.cell_id };
+  add({ kind: 'envelope', input: JSON.stringify(body), status, keys: v.keys, request });
 }
 for (const v of envBases) {
   const body = JSON.parse(v.input);
-  for (const n of ['1.0', '1e2', '-0', '1.5', 'true', '"1"', '1e400']) {
-    if ('age_seconds' in body) add({ kind: 'envelope', input: v.input.replace(/"age_seconds": [0-9]+/, `"age_seconds": ${n}`), status: v.status, keys: v.keys });
-    if ('retry_after_seconds' in body) add({ kind: 'envelope', input: v.input.replace(/"retry_after_seconds": [0-9]+/, `"retry_after_seconds": ${n}`), status: v.status, keys: v.keys });
+  for (const n of ['1.0', '1e2', '-0', '1.5', 'true', '"1"', '1e400', '0', '30', '9007199254740991', '9007199254740992', '3E1', '0.0']) {
+    if ('age_seconds' in body) add({ kind: 'envelope', input: v.input.replace(/"age_seconds": [0-9]+/, `"age_seconds": ${n}`), status: v.status, keys: v.keys, request: v.request });
+    if ('retry_after_seconds' in body) add({ kind: 'envelope', input: v.input.replace(/"retry_after_seconds": [0-9]+/, `"retry_after_seconds": ${n}`), status: v.status, keys: v.keys, request: v.request });
   }
 }
 

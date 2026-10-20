@@ -41,7 +41,11 @@ class Parser {
   private i = 0;
   /** Path of the first string holding an escaped lone surrogate; reported after parsing. */
   surrogatePath: string | null = null;
-  constructor(private readonly s: string) {}
+  constructor(
+    private readonly s: string,
+    /** When given, receives the source text of every number, by JSON path. */
+    private readonly numbers?: Map<string, string>,
+  ) {}
 
   private err(msg: string): never {
     fail('E_PARSE_JSON', `${msg} at offset ${this.i}`, '$');
@@ -83,7 +87,7 @@ class Parser {
       this.i += 4;
       return null;
     }
-    if (c === '-' || (c >= '0' && c <= '9')) return this.number();
+    if (c === '-' || (c >= '0' && c <= '9')) return this.number(path);
     if (c === undefined) this.err('unexpected end of input');
     if (s.startsWith('NaN', this.i) || s.startsWith('Infinity', this.i) || s.startsWith('-Infinity', this.i)) {
       this.err('NaN and Infinity are not JSON');
@@ -218,7 +222,7 @@ class Parser {
     return out;
   }
 
-  private number(): number {
+  private number(path: string): number {
     const s = this.s;
     const m = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
     m.lastIndex = this.i;
@@ -231,28 +235,29 @@ class Parser {
     this.i += text.length;
     const n = Number(text);
     if (!Number.isFinite(n)) fail('E_PARSE_JSON', `number out of IEEE 754 range: ${text.slice(0, 40)}`, '$');
+    this.numbers?.set(path, text);
     return n;
   }
 }
 
 /** Parse JSON text strictly. */
-export function parseJsonText(text: string): JsonValue {
+export function parseJsonText(text: string, numbers?: Map<string, string>): JsonValue {
   if (text.charCodeAt(0) === 0xfeff) fail('E_PARSE_JSON', 'byte order mark', '$');
   if (hasLoneSurrogate(text)) fail('E_PARSE_JSON', 'lone surrogate in the text', '$');
-  const p = new Parser(text);
+  const p = new Parser(text, numbers);
   const v = p.parseDocument();
   if (p.surrogatePath !== null) fail('E_PARSE_JSON', 'lone surrogate', p.surrogatePath);
   return v;
 }
 
 /** Parse UTF-8 JSON bytes strictly: no BOM, no invalid UTF-8. */
-export function parseJsonBytes(bytes: Uint8Array): JsonValue {
+export function parseJsonBytes(bytes: Uint8Array, numbers?: Map<string, string>): JsonValue {
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     fail('E_PARSE_JSON', 'byte order mark', '$');
   }
   const text = utf8Decode(bytes);
   if (text === null) fail('E_PARSE_JSON', 'invalid UTF-8', '$');
-  return parseJsonText(text);
+  return parseJsonText(text, numbers);
 }
 
 /**
@@ -287,9 +292,9 @@ export function normalizeValue(v: unknown, path = '$', depth = 0): JsonValue {
 }
 
 /** JSON text (string), UTF-8 bytes (Uint8Array) or an already-parsed value. */
-export function toJson(input: unknown): JsonValue {
-  if (typeof input === 'string') return parseJsonText(input);
-  if (input instanceof Uint8Array) return parseJsonBytes(input);
-  if (input instanceof ArrayBuffer) return parseJsonBytes(new Uint8Array(input));
+export function toJson(input: unknown, numbers?: Map<string, string>): JsonValue {
+  if (typeof input === 'string') return parseJsonText(input, numbers);
+  if (input instanceof Uint8Array) return parseJsonBytes(input, numbers);
+  if (input instanceof ArrayBuffer) return parseJsonBytes(new Uint8Array(input), numbers);
   return normalizeValue(input);
 }

@@ -351,15 +351,15 @@ export function validate(v: JsonValue, kind: Kind, path = '$'): void {
 }
 
 /**
- * The unit of a cell's value (SPEC 7.1, units.md 3). Order: the descriptor's structure, the
- * cell's structure, the cell's canonical form, fn_hash against the descriptor
- * (E_FN_HASH_MISMATCH), the descriptor's canonical form, then resolution.
+ * The unit of a cell's value (SPEC 7.1, units.md 3). Order: the cell (structure, canonical
+ * form), fn_hash against the descriptor (E_FN_HASH_MISMATCH), the descriptor (structure,
+ * canonical form), then substitution.
  */
 export function cellUnit(desc: JsonValue, cell: JsonValue, fnHash: (d: JsonValue) => string): string | null {
-  structFunction(desc, 'descriptor');
   structCell(cell, 'cell', false);
   canonCell(cell as JsonObject, 'cell');
   if (fnHash(desc) !== (cell as JsonObject).fn_hash) fail('E_FN_HASH_MISMATCH', 'the descriptor does not hash to cell.fn_hash', 'descriptor');
+  structFunction(desc, 'descriptor');
   canonFunction(desc as JsonObject, 'descriptor');
   const sig = (desc as JsonObject).signature as JsonObject;
   return resolveUnit(sig.returns, (cell as JsonObject).args as JsonObject, 'descriptor.signature.returns', 'cell.args');

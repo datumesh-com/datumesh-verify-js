@@ -13,6 +13,16 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The package records spec-0.2.0; the spec submodule must be that revision: commit 240a830 or
+# the spec-0.2.0 tag.
+SPEC_HEAD="$(git -C spec rev-parse HEAD)"
+SPEC_TAG="$(git -C spec tag --points-at HEAD 2>/dev/null | grep -x spec-0.2.0 || true)"
+case "$SPEC_HEAD" in
+  240a830*) echo "== spec submodule at $SPEC_HEAD" ;;
+  *) [ -n "$SPEC_TAG" ] || { echo "spec submodule at $SPEC_HEAD: neither 240a830 nor the spec-0.2.0 tag"; exit 1; }; echo "== spec submodule at tag $SPEC_TAG" ;;
+esac
+grep -q '"spec": "spec-0.2.0"' package.json
+
 echo "== npm pack (in node:18-slim)"
 docker run --rm -v "$ROOT":/src:ro -v "$WORK":/out node:18-slim sh -ec '
   cp -r /src /build && cd /build && rm -rf node_modules dist
@@ -64,10 +74,11 @@ const k: KeysResult = keysFromResponse("rates.example.org", 404);
 const r: VerifyResult = verify("{}", k, null, new Uint8Array([1]));
 const code: string = r.code;
 const ref = parseUri("cell://math.example/pi", { args: {}, returns: { type: "number", unit: "1" } });
-const env: EnvelopeResult = checkEnvelope(404, "{\"outcome\":\"not_covered\"}", k);
+const env: EnvelopeResult = checkEnvelope(404, "{\"outcome\":\"not_covered\"}", k, { cell_id: "00".repeat(32) });
+const checked: boolean = r.blobChecked;
 const unit: string | null = env.ok ? null : resolvedUnit("{}", "{}");
 const e: DatumeshError | null = null;
-console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, e);
+console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e);
 TS
   cat > cjs.cts <<TS
 import lib = require("@datumesh/verify");

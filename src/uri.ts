@@ -1,9 +1,9 @@
 // Cell URIs (SPEC.md section 5).
-import { DatumeshError, fail } from './errors.js';
-import { isObject, sortedKeys, toJson, type JsonObject } from './json.js';
-import { LIMITS, checkArgName, checkInstant, checkName, checkNamespace, checkTypedValue, type TypeName } from './lexical.js';
+import { fail } from './errors.js';
+import { isObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
+import { LIMITS, checkArgName, checkInstant, checkName, checkNamespace, checkTypedValue, isTypeName, type TypeName } from './lexical.js';
 import { utf8Decode, utf8Encode } from './utf8.js';
-import { canonSignature, structSignature, validate } from './validate.js';
+import { validate } from './validate.js';
 
 /** A typed scalar (SPEC 4.1). */
 export interface TypedScalar {
@@ -68,18 +68,20 @@ function encodeValue(s: string): string {
   return out;
 }
 
+/**
+ * SPEC 5.4: the signature is taken as given (it comes from a descriptor already checked under
+ * section 7); only the declared argument names and types are used. Something that is not a
+ * signature at all is a programmer error.
+ */
 function readSignature(signature: unknown): JsonObject {
-  if (signature === null || signature === undefined) throw new TypeError('parseUri needs the function signature (descriptor.signature)');
-  let sig;
+  let sig: JsonValue;
   try {
     sig = toJson(signature);
-    structSignature(sig, 'signature');
-    canonSignature(sig as JsonObject, 'signature');
-  } catch (e) {
-    if (e instanceof DatumeshError) throw new DatumeshError(e.code, `invalid signature: ${e.detail}`, e.path?.replace(/^\$/, 'signature') ?? 'signature');
-    throw e;
+  } catch {
+    throw new TypeError('parseUri needs the function signature (descriptor.signature) as JSON');
   }
-  return sig as JsonObject;
+  if (!isObject(sig) || !isObject(sig.args)) throw new TypeError('parseUri needs the function signature (descriptor.signature): an object with args');
+  return sig;
 }
 
 /**
@@ -159,8 +161,13 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
       args[p.name] = '*';
       continue;
     }
-    const type = (declared[p.name] as JsonObject).type as TypeName;
+    const decl = declared[p.name];
+    const type = (isObject(decl) ? decl.type : undefined) as TypeName;
     const s = decodeValue(p.value, at(p.name));
+    // The signature is not validated (5.4), but a value is read by its declared type: a
+    // declaration without a string type is E_SCHEMA, an unknown type name E_CANON_TYPE.
+    if (typeof type !== 'string') fail('E_SCHEMA', `the signature declares ${p.name} without a string type`, `signature.args.${p.name}`);
+    if (!isTypeName(type)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(type)} in the signature`, `signature.args.${p.name}.type`);
     if (type === 'boolean') {
       if (s !== 'true' && s !== 'false') fail('E_CANON_TYPE', 'boolean must be true or false', at(p.name));
       args[p.name] = { type, value: s === 'true' };

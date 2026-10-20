@@ -1,6 +1,7 @@
 # Places where SPEC.md was insufficient
 
-Two sections: `spec-0.2.0` (entries 19-32, this release) and `spec-0.1.1` (entries 1-18).
+Two sections: `spec-0.2.0` (entries 19-34, this release) and `spec-0.1.1` (entries 1-18). Entries
+that a later spec commit resolved say so in their heading; their text is kept as written.
 
 Found while implementing `@datumesh/verify` from SPEC.md and `vectors/` only. The source of
 `tools/canon.py`, `tools/gen_vectors.py` and `tests/` was never read. Where the text left a
@@ -36,7 +37,63 @@ mutations in the last run).
 Every vector could be reproduced from the spec text plus the vectors. The entries below list what
 had to be inferred.
 
-## 19. Gap: resolving a unit checks the descriptor against `cell.fn_hash` (7.1, units.md 3, 10.2)
+## Status at spec commits `2a77580` and `240a830`
+
+The spec moved to `2a77580`, which took up most of the entries below, then to `1400247` and
+`240a830` (the target now). Re-checked against the `240a830` text, 319 vectors and the reference tool (all four modes of `scripts/oracle-diff.sh` now agree on
+every case, URIs included):
+
+| Entry | Status at `2a77580` | Where the new text differs from what I had inferred |
+|---|---|---|
+| 1, 2 | Resolved (5.1, 5.4 step 1); the tool now agrees with the library | — |
+| 3 | Resolved (10.1 step 7.5) | — |
+| 8 | Partly: 5.5 now spells out the licence URL rule for `authorise`; 8.1 itself still has no grammar | — |
+| 19 | Resolved (units.md 3) | The cell is checked before the descriptor's structure, not after: `resolvedUnit(5, cell)` is now `E_FN_HASH_MISMATCH`, not `E_SCHEMA`. Library changed. |
+| 20, 21, 22, 30, 31 | Resolved | — |
+| 23 | Resolved (units.md 2.4: year `0000`, and the 64-character limit is `E_CANON_UNIT`) | — |
+| 24 | Resolved (5.5, schema `enum`) | `E_ENVELOPE` may no longer be sent in `error`; `bad_request` carries only URI parse codes. Library changed. |
+| 25, 27 | Resolved (5.5 step 2) | — |
+| 26 | Resolved (5.5 "Integer members") | The text decides: `30.0`, `3e1`, `-0` are now `E_ENVELOPE`. The strict parser now keeps each number's source text so the envelope check can see it. Library changed. |
+| 28 | Resolved (10.1 step 7.7) | Content for a non-blob value is now `E_SCHEMA` instead of being ignored, and results gain `blob_checked` (`VerifyResult.blobChecked`). Library changed. |
+| 29 | Resolved (5.4): `parse` does not validate the signature | Library changed to match: see entry 34 for what is left open. |
+| 32 | Open (note only) | — |
+
+New at `2a77580`: entries 33 and 34. At `1400247` the blob receipt vectors gained
+`blob_checked` (entry 33 resolved), and 5.5 now says a malformed request description is the
+caller's error, which is what the library already did (`TypeError`). At `240a830` a `stale`
+receipt's `asof` must be at or before the requested `asof` instead of equal to it (D31); library
+changed, with tests for both sides of the boundary.
+
+## 33. Conflict: `blob_checked` is in section 11 but not in the vectors (11) [resolved at 1400247]
+
+- **Problem.** Section 11 says a receipt vector with `blob_hex` outputs `blob_checked` (true),
+  and `schemas/vector.schema.json` defines the field. But none of the 317 vector files carries
+  it: `receipt/blob-value` and `receipt/blob-value-recomputed` have `blob_hex` and no
+  `blob_checked`. A conformance runner that compares "exactly the section 11 fields" with the
+  files therefore cannot pass both ways.
+- **Resolution.** The runner outputs `blob_checked` for every receipt vector that has `blob_hex`
+  (section 11). `tools/check-vectors.mjs` compares it with the file when the file has the field,
+  and otherwise requires `true` exactly when `blob_hex` is given.
+- **Proposed fix.** Add `"blob_checked": true` to the valid receipt vectors with `blob_hex`.
+
+## 34. Gap: what `parse` does with a signature that is not a signature (5.4)
+
+- **Problem.** 5.4 now says the signature "is taken as given" and not checked. It does not say
+  what happens when it cannot be used: a declaration without `type`, with a non-string `type`,
+  with an unknown type name, or not an object. The reference tool reports an unknown type name
+  as `E_CANON_TYPE` and a non-string `type` as `E_SCHEMA`, both only when a value is read for
+  that argument (a slice `*` passes), after its percent-decoding. On a declaration without
+  `type`, or one that is not an object, it crashes (a Python `KeyError`/`TypeError` traceback;
+  that traceback is the only part of the tool's source I saw, and only as crash output).
+- **Resolution.** As the tool where it answers. Where it crashes, the library reports `E_SCHEMA`
+  (the declaration has no string `type`), also only when a value is read. A signature that is not
+  an object with an `args` object is a programmer error (`TypeError`). These cases are left out of
+  `tools/oracle-diff/cases-0.2.mjs`, because the tool crashes on them.
+- **Proposed wording (5.4).** "Only the declared types of the arguments in the URI are used,
+  when their values are read: a declaration whose `type` is missing or not a string is `E_SCHEMA`,
+  an unknown type name `E_CANON_TYPE`. Nothing else in the signature is examined."
+
+## 19. Gap: resolving a unit checks the descriptor against `cell.fn_hash` (7.1, units.md 3, 10.2) [resolved at 2a77580]
 
 - **Problem.** Neither 7.1 ("Resolution") nor units.md section 3 says that the descriptor used to
   resolve a unit must be the cell's function. Yet `vectors/invalid/unit-fn-hash-mismatch.json`
@@ -55,7 +112,7 @@ had to be inferred.
   then the descriptor's canonical form." And add "unit" to the Step column of
   `E_FN_HASH_MISMATCH`, `E_ARG_MISSING`, `E_ARG_TYPE` and `E_SLICE` in 10.2 (see entry 20).
 
-## 20. Gap: which cell arguments unit resolution looks at, and with which codes (7.1, units.md 3)
+## 20. Gap: which cell arguments unit resolution looks at, and with which codes (7.1, units.md 3) [resolved at 2a77580]
 
 - **Problem.** units.md 3 says a referenced argument "resolves to that argument's value in the
   cell" and that a slice cannot be resolved (`E_SLICE`), but not what happens when the referenced
@@ -76,7 +133,7 @@ had to be inferred.
   of type `string`, `E_ARG_TYPE`; a value that is not a literal unit of section 2 (on a rate side,
   not a currency code of 2.1), `E_CANON_UNIT`. Other arguments of the cell are not checked."
 
-## 21. Underspecified: which unit rules belong to step 2 and which to step 3 (7, 7.1, 10.1)
+## 21. Underspecified: which unit rules belong to step 2 and which to step 3 (7, 7.1, 10.1) [resolved at 2a77580]
 
 - **Problem.** Section 7 lists the unit failures (`E_CANON_UNIT`) and the shape failures
   (`E_SCHEMA`) side by side, and 10.1 orders steps 2 and 3 only for receipts. For a descriptor
@@ -101,7 +158,7 @@ had to be inferred.
   unit of any other shape than in units.md 1 are `E_SCHEMA`. Then, per argument: `type`, `unit`,
   `valid`; then `returns`: `type`, then that it is `number`, then `unit`."
 
-## 22. Underspecified: argument references to names that are not argument names (7.1, schemas)
+## 22. Underspecified: argument references to names that are not argument names (7.1, schemas) [resolved at 2a77580]
 
 - **Problem.** 7.1 says a reference names "an argument of the same signature of type `string`";
   `schemas/defs.schema.json` makes `arg` an `argName`. Whether `{"arg": "Bad"}` or
@@ -116,7 +173,7 @@ had to be inferred.
 - **Proposed wording (7.1).** "A reference whose `arg` is not the name of a `string` argument of
   the same signature, including a name that is not a valid argument name, is `E_CANON_UNIT`."
 
-## 23. Underspecified: index units (units.md 2.4, Appendix A)
+## 23. Underspecified: index units (units.md 2.4, Appendix A) [resolved at 2a77580]
 
 - **Problem.** units.md gives the index grammar and "at most 64 characters", but no error code
   for a too-long index unit (4.5 would suggest `E_CANON_LIMIT`), and does not say that year `0000`
@@ -130,7 +187,7 @@ had to be inferred.
 - **Proposed wording (units.md 2.4).** "Every failure, including the length limit, is
   `E_CANON_UNIT`."
 
-## 24. Conflict: envelope `error` codes (5.5, `schemas/envelope.schema.json`)
+## 24. Conflict: envelope `error` codes (5.5, `schemas/envelope.schema.json`) [resolved at 2a77580]
 
 - **Problem.** 5.5 says `error` is "a code from 10.2", and `invalid/envelope-error-unknown-code`
   expects `E_ENVELOPE` for `E_TEAPOT`. The schema accepts any string matching `^E_[A-Z_]+$`, so
@@ -141,7 +198,7 @@ had to be inferred.
 - **Proposed wording (5.5).** "`error`: one of the codes of the table in 10.2." And make the
   schema an `enum` of those codes.
 
-## 25. Gap: what "a receipt object" means in step 2 of the envelope check (5.5)
+## 25. Gap: what "a receipt object" means in step 2 of the envelope check (5.5) [resolved at 2a77580]
 
 - **Problem.** Step 2 checks members "against the table and the rules above (`E_ENVELOPE`)",
   and the rule for `receipt` is "a receipt object (section 8)". Step 4 then verifies "with that
@@ -154,7 +211,7 @@ had to be inferred.
 - **Proposed wording (5.5, step 2).** "...`receipt` must be a JSON object; it is checked as a
   receipt only in step 4."
 
-## 26. Underspecified: integral JSON numbers in envelopes (5.5, 6.1)
+## 26. Underspecified: integral JSON numbers in envelopes (5.5, 6.1) [resolved at 2a77580]
 
 - **Problem.** `age_seconds` and `retry_after_seconds` are "JSON numbers with integral values".
   It is not said whether `1.0`, `1e2` or `-0` qualify (they have integral values), nor whether
@@ -169,7 +226,7 @@ had to be inferred.
   by digits, at most 2^53 - 1 (`E_ENVELOPE` for any other spelling)", which is unambiguous, or
   state that the value after parsing as an IEEE 754 double (6.1) is what must be integral.
 
-## 27. Underspecified: the rules `reason`, `superseded_by` and `quote` refer to (5.5, 8.1)
+## 27. Underspecified: the rules `reason`, `superseded_by` and `quote` refer to (5.5, 8.1) [resolved at 2a77580]
 
 - **Problem.** `reason` "follows the string rules (3.5) with the `summary` limit", `superseded_by`
   is a receipt hash (6.3, `E_CANON_HEX`), `quote.amount` "a number in the form of 3.1", and
@@ -186,7 +243,7 @@ had to be inferred.
 - **Proposed wording (5.5).** "A member that breaks any rule here, including a rule borrowed
   from another section, is `E_ENVELOPE`." And give the licence URL a grammar (entry 8).
 
-## 28. Gap: verification level when blob content was checked (10.1 step 7.7, 11)
+## 28. Gap: verification level when blob content was checked (10.1 step 7.7, 11) [resolved at 2a77580]
 
 - **Problem.** 7.7 is a sub-step of step 7 ("makes the receipt fully verified"), but "MAY run
   directly after step 6, without 7.1-7.6". Section 11 has only `signed` and `recomputed`. Whether
@@ -199,7 +256,7 @@ had to be inferred.
   verified; a receipt whose content passed this check without recomputation is still
   signature-valid only."
 
-## 29. Gap: is a cell URI's `signature` validated? (5.4)
+## 29. Gap: is a cell URI's `signature` validated? (5.4) [resolved at 2a77580]
 
 - **Problem.** `parse(uri, signature)` takes the descriptor's signature for the argument types.
   5.4 does not say whether the signature itself must be valid. With units this matters: every
@@ -215,7 +272,7 @@ had to be inferred.
   reported with its descriptor code before the URI is examined." Or, if the tool is right, "The
   signature is trusted as given; only the types of the named arguments are used."
 
-## 30. Gap: the `unit` vector's wrapper (11)
+## 30. Gap: the `unit` vector's wrapper (11) [resolved at 2a77580]
 
 - **Problem.** A `unit` vector's input is "JSON text of `{"cell", "descriptor"}`". Section 11
   does not say what the expected error is when the wrapper itself is wrong (not an object, a
@@ -227,7 +284,7 @@ had to be inferred.
 - **Proposed wording (11, `unit` row).** "...a wrapper that is not exactly `{"cell",
   "descriptor"}` is `E_SCHEMA`."
 
-## 31. Editorial: raw control characters in the schemas (`schemas/defs.schema.json`, `schemas/function.schema.json`)
+## 31. Editorial: raw control characters in the schemas (`schemas/defs.schema.json`, `schemas/function.schema.json`) [resolved at 2a77580]
 
 - **Problem.** At `spec-0.1.1` the string patterns were written with escapes
   (`"^[^\u0000-\u001f\u007f-\u009f]*$"`). At `0c7accc` the files were re-serialised and the
@@ -249,7 +306,7 @@ had to be inferred.
 
 # spec-0.1.1
 
-## 1. Conflict: userinfo and port in a cell URI (5.1, 10.2)
+## 1. Conflict: userinfo and port in a cell URI (5.1, 10.2) [resolved at 2a77580]
 
 - **Problem.** 5.1 says: "A cell URI has no fragment, no userinfo, no port and no empty query.
   Failures of this outer grammar are `E_PARSE_URI`." The reference tool reports
@@ -262,7 +319,7 @@ had to be inferred.
   (`@`) or a port (`:`) before the first `/`, a fragment, an empty query, or a parameter without
   `=`." If `E_CANON_NAME` is what was intended, change 5.1 instead. Either way, add a vector.
 
-## 2. Conflict: a parameter without `=` versus an invalid name (5.4 steps 1-2)
+## 2. Conflict: a parameter without `=` versus an invalid name (5.4 steps 1-2) [resolved at 2a77580]
 
 - **Problem.** 5.4 checks "1. the outer grammar; 2. the namespace and function names", and 10.2
   puts "a parameter without `=`" under `E_PARSE_URI`, which is outer grammar. When a URI has both
@@ -276,7 +333,7 @@ had to be inferred.
   scheme, fragment and empty query; 2. the namespace and function names; 3. the split of the
   query into `name=value` parameters (`E_PARSE_URI`); 4. ...".
 
-## 3. Conflict: order of hash check and verification for input receipts (10.1 step 7.5)
+## 3. Conflict: order of hash check and verification for input receipts (10.1 step 7.5) [resolved at 2a77580]
 
 - **Problem.** 7.5 lists "obtain the input receipt (`E_INPUT_UNAVAILABLE`), which must hash to
   the listed hash", then "verify it through step 6 (`E_INPUT_INVALID`)". In

@@ -23,6 +23,8 @@ export interface VerifyResult {
   detail: string;
   /** Where the failure was found (a JSON path like `$.cell.args.base`), or null. */
   path: string | null;
+  /** True only when blob content was supplied and step 7.7 ran and passed. Does not change `level`. */
+  blobChecked: boolean;
 }
 
 /** Input for SPEC 10.1 step 7. The library does not evaluate functions; `value` is the result. */
@@ -159,8 +161,12 @@ function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): void {
   if (v.type !== receipt.type || v.value !== receipt.value) stop('E_VALUE_MISMATCH', 'recomputed value differs from the receipt', '$.value');
 }
 
-/** Step 7.7: the content has exactly `length` bytes, then SHA-256 equal to the blob's hash. */
+/**
+ * Step 7.7: content is only for a blob value (E_SCHEMA otherwise); it has exactly `length`
+ * bytes, then a SHA-256 equal to the blob's hash (E_BLOB_MISMATCH).
+ */
 function checkContent(receipt: JsonObject, content: Uint8Array): void {
+  if (receipt.type !== 'blob') stop('E_SCHEMA', `content was supplied, but the value is a ${String(receipt.type)}, not a blob`, '$.type');
   const blob = checkBlob(receipt.value as string, '$.value'); // already checked in step 3
   if (content.length !== blob.length) stop('E_BLOB_MISMATCH', `content is ${content.length} bytes, the blob says ${blob.length}`, '$.value');
   if (sha256Hex(content) !== blob.sha256) stop('E_BLOB_MISMATCH', "the content's SHA-256 is not the blob's hash", '$.value');
@@ -190,8 +196,9 @@ function checkRecomputeArg(rc: unknown): Recompute | null {
  * Verify a receipt (SPEC 10.1). `receipt` is JSON text, UTF-8 bytes or a parsed object (only
  * text and bytes allow duplicate-member detection). `keys` is a key document, a KeysResult, a
  * {keyId: publicKeyHex} map, or an array of these. With `recompute`, step 7 runs too. With
- * `blob`, the content of a blob value, step 7.7 checks it when the receipt's type is `blob`
- * (after step 7 when recomputing, otherwise right after step 6); it does not change `level`.
+ * `blob`, the content of a blob value, step 7.7 runs last (after step 7 when recomputing,
+ * otherwise right after step 6): E_SCHEMA if the value is not a blob, E_BLOB_MISMATCH if the
+ * content does not match. It does not change `level`; `blobChecked` reports it.
  *
  * Never throws for an invalid receipt or bad key material; throws TypeError only when an
  * argument is of the wrong kind altogether.
@@ -204,7 +211,7 @@ export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute
   try {
     const { receipt: r } = verifySigned(receipt, sources, (h) => (hash = h));
     if (rc) recompute(r, rc, sources);
-    const checked = content !== null && r.type === 'blob';
+    const checked = content !== null;
     if (checked) checkContent(r, content);
     const what = rc ? 'fully verified: signature valid and value recomputed' : `signature-valid: signed by ${r.computed_by as string}`;
     return {
@@ -215,9 +222,10 @@ export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute
       key: r.computed_by as string,
       detail: checked ? `${what}; blob content matches` : what,
       path: null,
+      blobChecked: checked,
     };
   } catch (e) {
-    if (e instanceof Stop) return { ok: false, code: e.code, level: null, hash, key: null, detail: e.detail, path: e.path };
+    if (e instanceof Stop) return { ok: false, code: e.code, level: null, hash, key: null, detail: e.detail, path: e.path, blobChecked: false };
     throw e; // a bug in this library, not a property of the receipt
   }
 }
