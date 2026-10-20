@@ -1,7 +1,7 @@
 // Cell URIs (SPEC.md section 5).
 import { fail } from './errors.js';
 import { isObject, memberPath, normalizeValue, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
-import { LIMITS, checkArgName, checkInstant, checkName, checkNamespace, checkTypedValue, isTypeName, type TypeName } from './lexical.js';
+import { LIMITS, checkArgName, checkDnsName, checkInstant, checkName, checkNamespace, checkTypedValue, isTypeName, type TypeName } from './lexical.js';
 import { utf8Decode, utf8Encode } from './utf8.js';
 import { validate } from './validate.js';
 
@@ -210,5 +210,7 @@ export function formatUri(ref: CellRef | unknown): string {
 /** The HTTPS URL of a cell URI on mesh host `mesh` (SPEC 5.3). */
 export function httpsUrl(uri: string, mesh: string): string {
   if (!uri.startsWith(SCHEME)) fail('E_PARSE_URI', 'not a cell URI', '$');
+  // SPEC 5.3: the mesh is a DNS name on the default HTTPS port (no port, IP address or userinfo).
+  checkDnsName(mesh, 'mesh');
   return `https://${mesh}/cell/${uri.slice(SCHEME.length)}`;
 }

@@ -52,6 +52,8 @@ export function verifyEd25519Strict(sig: Uint8Array, msg: Uint8Array, pub: Uint8
   const h = sha512(concat(rBytes, pub, msg));
   const k = le(h) % L;
   // R' = [S]B - [k]A (multiplyUnsafe accepts 0; inputs are public, so variable time is fine).
+  // subtract() adds the negation of the point [k]A, as SPEC 10.1 step 6 requires; it is not
+  // [L - k]A, which differs for a mixed-order A (receipt/ed25519-mixed-order-key).
   const SB = s === 0n ? Point.ZERO : Point.BASE.multiplyUnsafe(s);
   const kA = k === 0n ? Point.ZERO : A.multiplyUnsafe(k);
   const rCheck = SB.subtract(kA).toBytes();

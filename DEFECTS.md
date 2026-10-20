@@ -48,9 +48,34 @@ agree on every case of `scripts/oracle-diff.sh`.
 | 32 (media type length) | Open (note only) | — |
 | 34 (unreadable signature) | Resolved (5.4 step 5) | Differs from what I had done: an unreadable signature is `E_SCHEMA` checked as a whole at step 5 (after the outer grammar, names and argument count; before unknown and missing arguments; declarations in JCS order), not when a value is read, and a signature that is not an object is `E_SCHEMA`, not `TypeError`. A signature given as a string is now a non-object (`E_SCHEMA`) rather than JSON text to parse. |
 
+At `58eb0d9` (339 vectors) the revision adds the vector `invalid/keys-host-not-dns-name` and
+several clarifications; checked against each:
+
+- **9.3, keys only for DNS names: the library was wrong here.** `keysFromResponse` accepted a
+  document for a host that is not a DNS name (`Rates.Example.org`) when the document named the
+  same host. Now the document's `host` must be a DNS name, so interpreting a response for any
+  other host gives `E_KEY_DOC`. `fetchKeys` already refused to fetch for such a host
+  (`E_KEY_UNAVAILABLE`). Tests cover uppercase, trailing-dot, IP, single-label, port and
+  userinfo hosts.
+- **9.3, bounded retrieval (SHOULD):** `fetchKeys` had the 10-second timeout but no size bound.
+  It now abandons a document over 256 KiB, reading the body as a stream where the platform
+  allows (`E_KEY_UNAVAILABLE`; exported as `FETCH_MAX_BYTES`).
+- **5.3, the mesh host is a DNS name:** `httpsUrl(uri, mesh)` did not check `mesh`. It now
+  rejects anything that is not a DNS name (port, IP address, userinfo, uppercase) with
+  `E_CANON_NAME`.
+- **4.5 / 9.2, more than 64 keys is `E_KEY_DOC`:** already so; a test now asserts it.
+- **5.5, a malformed request description is the caller's error:** already a `TypeError`.
+- **11, the `recompute` object:** already as described (no descriptor is `E_FN_UNAVAILABLE`, a
+  missing input is unavailable, `value` required).
+- **10.1 step 6, `-[k]A` by point negation:** already so (`[S]B.subtract([k]A)` adds the
+  negated point), and `receipt/ed25519-mixed-order-key` passes. A comment in `src/ed25519.ts`
+  now says so.
+- **6.1 (`b1924f5`), the nesting limit on already-parsed values:** this is what entry 35 proposed;
+  entry 35 is resolved.
+
 Also fixed, as reported: `parseUri` used to throw `TypeError` on `invalid/uri-signature-not-object`, which ended the conformance runner and skipped the vectors after it. It now returns `E_SCHEMA`, and the runner reports any exception other than `DatumeshError` as that vector's result instead of stopping.
 
-## 35. Note: the nesting limit for values that are not text (6.1)
+## 35. Note: the nesting limit for values that are not text (6.1) [resolved at b1924f5]
 
 - **Observation.** 6.1 counts nesting in the text ("`[` and `{` open at once, counted outside
   strings"). `canonicalize`, `verify` and the other entry points also accept already-parsed

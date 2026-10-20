@@ -4,6 +4,15 @@ import { fromHex, keyIdOf } from './hash.js';
 import { has, isObject, memberPath, sortedKeys, toJson, type JsonValue } from './json.js';
 import { LIMITS, checkDnsName, isHex, isInstant } from './lexical.js';
 
+function isDnsName(s: string): boolean {
+  try {
+    checkDnsName(s, '$');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** One validated key from a key document. */
 export interface KeyEntry {
   alg: 'ed25519';
@@ -49,6 +58,8 @@ function validateKeyDocument(doc: JsonValue, host: string): KeyEntry[] {
   for (const k of sortedKeys(doc)) if (!['host', 'keys', 'proto'].includes(k)) bad(`unexpected member ${JSON.stringify(k)}`, '$');
   for (const k of ['host', 'keys', 'proto']) if (!has(doc, k)) bad(`missing member ${JSON.stringify(k)}`, '$');
   if (doc.proto !== 'datumesh/1') bad("proto must be 'datumesh/1'", '$.proto');
+  // 9.2 / 9.3: `host` is a DNS name (2.1); a document for any other host cannot satisfy 9.2.
+  if (typeof doc.host !== 'string' || !isDnsName(doc.host)) bad('host must be a DNS name (SPEC 2.1); keys are resolved only for DNS names', '$.host');
   if (doc.host !== host) bad(`host must be ${JSON.stringify(host)}`, '$.host');
   const keys = doc.keys;
   if (!Array.isArray(keys) || keys.length < 1 || keys.length > LIMITS.keys) bad(`keys must be an array of 1 to ${LIMITS.keys} keys`, '$.keys');
@@ -135,6 +146,44 @@ export function keysFromDocument(doc: unknown): KeysResult {
 /** Default timeout of fetchKeys, in milliseconds. */
 export const FETCH_TIMEOUT_MS = 10_000;
 
+/** fetchKeys abandons a key document larger than this (SPEC 9.3: SHOULD bound retrieval). */
+export const FETCH_MAX_BYTES = 256 * 1024;
+
+class TooLarge extends Error {}
+
+/** Read a response body, abandoning it once it exceeds FETCH_MAX_BYTES. */
+async function readBounded(res: Response): Promise<Uint8Array> {
+  const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+  if (!reader) {
+    const b = new Uint8Array(await res.arrayBuffer());
+    if (b.length > FETCH_MAX_BYTES) throw new TooLarge();
+    return b;
+  }
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    if (n > FETCH_MAX_BYTES) {
+      try {
+        await reader.cancel();
+      } catch {
+        // abandoned anyway
+      }
+      throw new TooLarge();
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+}
+
 /**
  * Fetch https://<host>/.well-known/datumesh.json once, with TLS verified by the platform, no
  * redirects followed and a timeout, then interpret it with keysFromResponse. The only function
@@ -162,8 +211,9 @@ export async function fetchKeys(host: string, timeoutMs: number = FETCH_TIMEOUT_
     // status 0 (browsers); either way it is not 200.
     if (res.type === 'opaqueredirect') status = 0;
     if (status !== 200) return keysFromResponse(host, status);
-    body = new Uint8Array(await res.arrayBuffer());
+    body = await readBounded(res as Response);
   } catch (e) {
+    if (e instanceof TooLarge) return { ok: false, code: 'E_KEY_UNAVAILABLE', host, detail: `key document larger than 256 KiB; retrieval abandoned` };
     return { ok: false, code: 'E_KEY_UNAVAILABLE', host, detail: `retrieval failed: ${e instanceof Error ? e.message : String(e)}` };
   }
   return keysFromResponse(host, status, body);

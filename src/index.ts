@@ -15,7 +15,7 @@ export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './erro
 export { verify, type VerifyResult, type Recompute } from './verify.js';
 export { checkEnvelope, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust } from './envelope.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
-export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
+export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
