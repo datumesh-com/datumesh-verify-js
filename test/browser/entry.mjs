@@ -6,21 +6,18 @@
 // into <pre id="result">.
 import * as lib from '../../dist/esm/index.js';
 import { verifyEd25519Strict } from '../../dist/esm/ed25519.js';
-import { makeRunner, OUTPUTS, hexToBytes, receiptKeys } from '../../tools/vector-runner.mjs';
+import { makeRunner, compare, hexToBytes, receiptKeys } from '../../tools/vector-runner.mjs';
 import vectors from '../../.browser-test/vectors.json';
 import edCases from '../fixtures/ed25519-cases.json';
 
 const sha256 = async (b) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', b))].map((x) => x.toString(16).padStart(2, '0')).join('');
-const canon = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
 
 async function main() {
   const run = makeRunner(lib, sha256);
   const summary = { userAgent: navigator.userAgent, hasNodeProcess: typeof process !== 'undefined', vectors: { pass: 0, fail: 0, failures: [] }, byKind: {}, uriRoundTrips: 0, ed25519: { pass: 0, fail: 0 }, bitFlips: 0, bitFlipFailures: 0 };
   for (const v of vectors) {
     const got = await run(v);
-    let ok;
-    if (!v.valid) ok = got.error === v.error && Object.keys(got).length === 2;
-    else ok = got.error === null && OUTPUTS[v.kind].every((k) => canon(got[k]) === canon(v[k]));
+    const ok = compare(v, got).length === 0;
     const key = `${v.kind}/${v.valid ? 'valid' : 'invalid'}`;
     summary.byKind[key] ??= { pass: 0, fail: 0 };
     summary.byKind[key][ok ? 'pass' : 'fail']++;

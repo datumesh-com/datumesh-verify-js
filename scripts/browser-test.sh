@@ -34,7 +34,7 @@ assert m, "no result element in the dumped DOM"
 s = json.loads(html.unescape(m.group(1)))
 print(json.dumps(s, indent=1))
 assert "error" not in s, s.get("error")
-assert s["vectors"] == {"pass": 290, "fail": 0, "failures": []}, s["vectors"]
+assert s["vectors"] == {"pass": 319, "fail": 0, "failures": []}, s["vectors"]
 assert s["uriRoundTrips"] == 11 and s["ed25519"]["fail"] == 0 and s["ed25519"]["pass"] > 0
 assert s["unflippedOk"] is True and s["bitFlips"] > 5000 and s["bitFlipFailures"] == 0
 assert s["blobOk"] is True and s["blobFlips"] == 368 and s["blobFlipFailures"] == 0

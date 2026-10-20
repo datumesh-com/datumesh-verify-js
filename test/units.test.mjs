@@ -34,7 +34,9 @@ test('the embedded unit list (src/units-data.ts) is generated from spec/units.md
   assert.equal(readFileSync(OUT, 'utf8'), render(unitsMd));
   assert.deepEqual(Object.keys(groups), ['currency', 'physical', 'ratio']);
   assert.equal(CURRENCIES.length, 189);
-  for (const u of ['EUR', 'USD', 'GRD', 'XAU', 'degC', 'm/s', 'kWh', '1', 'count', 'percent', 'bp']) assert.ok(LITERALS.includes(u), u);
+  for (const u of ['EUR', 'USD', 'GRD', 'XAU', 'degC', 'm/s', 'kWh', '1', 'count', 'percent', 'bp', 'mm', 'cm', 'km/h', 'hPa', 'W/m2', 'permille']) assert.ok(LITERALS.includes(u), u);
+  assert.equal(LITERALS.length, 189 + 16 + 5);
+  assert.ok(!LITERALS.includes('W/m²'));
   assert.ok(!CURRENCIES.includes('XXX'));
 });
 
@@ -47,7 +49,7 @@ test('the currency list agrees with schemas/defs.schema.json', () => {
 const unitVectors = loadVectors().filter((v) => v.kind === 'unit');
 
 test('there are unit vectors, valid and invalid', () => {
-  assert.equal(unitVectors.length, 10);
+  assert.equal(unitVectors.length, 13);
   assert.ok(unitVectors.some((v) => v.valid && v.unit === null));
 });
 
@@ -214,14 +216,20 @@ test('resolvedUnit: lookup, slices, argument checks and the order of checks', ()
   // No unit for other return types, whatever the cell.
   const nb = JSON.parse(vector('unit/no-unit').input);
   assert.equal(U(nb, (a) => (a.calendar = '*')), null);
-  // Descriptor structure, cell structure, cell canonical form, fn_hash, descriptor canonical form.
+  // units.md 3: the cell (structure, canonical form), fn_hash, the descriptor (structure,
+  // canonical form), then substitution.
   const badCell = withArgs(fx, (a, c) => (c.ns = 'Bad.example'));
   const badDesc = clone(fx.descriptor);
   badDesc.code.lang = 'Bad';
   assert.equal(code(() => resolvedUnit(badDesc, fx.cell)), 'E_FN_HASH_MISMATCH');
   assert.equal(code(() => resolvedUnit(badDesc, { ...fx.cell, fn_hash: functionHashOf(badDesc) })), 'E_CANON_NAME');
   assert.equal(code(() => resolvedUnit(badDesc, badCell)), 'E_CANON_NAME');
-  assert.equal(code(() => resolvedUnit(5, badCell)), 'E_SCHEMA');
+  assert.equal(code(() => resolvedUnit(5, badCell)), 'E_CANON_NAME');
+  assert.equal(code(() => resolvedUnit(5, fx.cell)), 'E_FN_HASH_MISMATCH');
+  assert.equal(code(() => resolvedUnit({ ...fx.descriptor, y: 1 }, fx.cell)), 'E_FN_HASH_MISMATCH');
+  const schemaBad = { ...fx.descriptor, y: 1 };
+  assert.equal(code(() => resolvedUnit(schemaBad, { ...fx.cell, fn_hash: functionHashOf(schemaBad) })), 'E_SCHEMA');
+  assert.equal(code(() => resolvedUnit(5, { ...fx.cell, fn_hash: functionHashOf(5) })), 'E_SCHEMA');
   assert.equal(code(() => resolvedUnit({ ...fx.descriptor, y: 1 }, { ...fx.cell, x: 1 })), 'E_SCHEMA');
   assert.equal(code(() => resolvedUnit(fx.descriptor, { ...fx.cell, asof: '2024-03-16T09:00:00.000000Z' })), 'E_SCHEMA');
   assert.equal(code(() => resolvedUnit(fx.descriptor, '{"args":{},"args":{}}')), 'E_PARSE_DUPLICATE_KEY');

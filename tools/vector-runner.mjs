@@ -16,10 +16,35 @@ export const OUTPUTS = {
   uri: ['object', 'canonical', 'sha256', 'https'],
   keyid: ['key_id'],
   keys: ['key_ids'],
-  receipt: ['canonical', 'sha256', 'sig', 'level'],
+  receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked'], // blob_checked only with blob_hex
   unit: ['unit'],
   envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
 };
+
+const canonicalJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
+
+export function compare(v, got) {
+  const problems = [];
+  if (got.id !== v.id) problems.push(`id ${got.id}`);
+  if (!v.valid) {
+    if (got.error !== v.error) problems.push(`expected ${v.error}, got ${got.error}`);
+    const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error');
+    if (extra.length) problems.push(`unexpected outputs ${extra}`);
+    return problems;
+  }
+  if (got.error !== null) return [`expected success, got ${got.error}`];
+  // Section 11: a receipt vector with blob_hex outputs blob_checked. The vector files carry it
+  // since spec 1400247 (at 2a77580 they did not, DEFECTS.md 33); a file without it must not get
+  // one unless it has blob_hex.
+  if (v.kind === 'receipt' && v.blob_checked === undefined) {
+    const want = v.blob_hex !== undefined ? true : undefined;
+    if (got.blob_checked !== want) problems.push(`blob_checked: expected ${want}, got ${got.blob_checked}`);
+  }
+  for (const k of OUTPUTS[v.kind]) if (!(v.kind === 'receipt' && k === 'blob_checked' && v.blob_checked === undefined)) if (canonicalJson(got[k]) !== canonicalJson(v[k])) problems.push(`${k}: expected ${JSON.stringify(v[k]).slice(0, 200)}, got ${JSON.stringify(got[k]).slice(0, 200)}`);
+  const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error' && !OUTPUTS[v.kind].includes(k));
+  if (extra.length) problems.push(`unexpected outputs ${extra}`);
+  return problems;
+}
 
 const text = (bytes) => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
 
@@ -85,6 +110,7 @@ export function makeRunner(lib, sha256) {
           out.sha256 = res.hash;
           out.sig = JSON.parse(text(lib.canonicalize(inputOf(v), 'receipt'))).sig;
           out.level = res.level;
+          if (blob !== null) out.blob_checked = res.blobChecked;
           break;
         }
         case 'unit': {
@@ -98,7 +124,7 @@ export function makeRunner(lib, sha256) {
           break;
         }
         case 'envelope': {
-          const res = lib.checkEnvelope(v.status, inputOf(v), receiptKeys(lib, v));
+          const res = lib.checkEnvelope(v.status, inputOf(v), receiptKeys(lib, v), v.request);
           if (!res.ok) return { id: v.id, error: res.code };
           out.outcome = res.outcome;
           if (res.receiptHash !== null) {

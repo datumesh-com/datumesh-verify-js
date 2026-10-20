@@ -70,8 +70,8 @@ test('DatumeshError carries code, path and detail', () => {
 
 test('VerifyResult shape', () => {
   const ok = verify(stored.input, keys);
-  assert.deepEqual(Object.keys(ok).sort(), ['code', 'detail', 'hash', 'key', 'level', 'ok', 'path']);
-  assert.deepEqual({ ok: ok.ok, code: ok.code, level: ok.level, hash: ok.hash, key: ok.key, path: ok.path }, { ok: true, code: 'OK', level: 'signed', hash: stored.sha256, key: 'rates.example.org#d712b32a2cc5cb7c', path: null });
+  assert.deepEqual(Object.keys(ok).sort(), ['blobChecked', 'code', 'detail', 'hash', 'key', 'level', 'ok', 'path']);
+  assert.deepEqual({ ok: ok.ok, code: ok.code, level: ok.level, hash: ok.hash, key: ok.key, path: ok.path, blobChecked: ok.blobChecked }, { ok: true, code: 'OK', level: 'signed', hash: stored.sha256, key: 'rates.example.org#d712b32a2cc5cb7c', path: null, blobChecked: false });
   const full = verify(stored.input, keys, stored.recompute);
   assert.equal(full.level, 'recomputed');
   const bad = verify(vector('invalid/receipt-tampered-value').input, keys);

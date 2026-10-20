@@ -6,7 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { OUTPUTS } from './vector-runner.mjs';
+import { compare } from './vector-runner.mjs';
+
+export { compare };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = join(root, 'spec', 'vectors');
@@ -15,24 +17,6 @@ export function loadVectors() {
   const vs = [];
   for (const g of readdirSync(dir).sort()) for (const f of readdirSync(join(dir, g)).sort()) vs.push(JSON.parse(readFileSync(join(dir, g, f), 'utf8')));
   return vs;
-}
-
-const canonicalJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
-
-export function compare(v, got) {
-  const problems = [];
-  if (got.id !== v.id) problems.push(`id ${got.id}`);
-  if (!v.valid) {
-    if (got.error !== v.error) problems.push(`expected ${v.error}, got ${got.error}`);
-    const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error');
-    if (extra.length) problems.push(`unexpected outputs ${extra}`);
-    return problems;
-  }
-  if (got.error !== null) return [`expected success, got ${got.error}`];
-  for (const k of OUTPUTS[v.kind]) if (canonicalJson(got[k]) !== canonicalJson(v[k])) problems.push(`${k}: expected ${JSON.stringify(v[k]).slice(0, 200)}, got ${JSON.stringify(got[k]).slice(0, 200)}`);
-  const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error' && !OUTPUTS[v.kind].includes(k));
-  if (extra.length) problems.push(`unexpected outputs ${extra}`);
-  return problems;
 }
 
 export function runAll(env = {}) {

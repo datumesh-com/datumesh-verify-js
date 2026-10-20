@@ -38,13 +38,22 @@ test('formatUri rejects invalid references with their codes', () => {
   assert.throws(() => formatUri({ ns: 'a.example', fn: 'x', args: {}, asof: '2024-01-01T00:00:00Z' }), (e) => e.code === 'E_CANON_INSTANT');
 });
 
-test('parseUri validates the signature it is given', () => {
-  assert.throws(() => parseUri('cell://math.example/pi', { args: {}, returns: 'decimal' }), (e) => e.code === 'E_CANON_TYPE' && e.path === 'signature.returns');
-  assert.throws(() => parseUri('cell://math.example/pi', null), TypeError);
-  // Units are part of the signature (SPEC 7.1): a spec-0.1.1 signature with a bare number return
-  // is not a valid signature any more (DEFECTS.md, spec-0.2.0 section).
-  assert.throws(() => parseUri('cell://math.example/pi', { args: {}, returns: 'number' }), (e) => e.code === 'E_CANON_UNIT' && e.path === 'signature.returns');
-  assert.equal(parseUri('cell://math.example/pi', { args: {}, returns: { type: 'number', unit: '1' } }).fn, 'pi');
+test('parseUri takes the signature as given (SPEC 5.4) and uses only argument types', () => {
+  // The signature is not validated: a spec-0.1.1 bare number return, an unknown return type,
+  // a unit on a string argument or extra members do not matter.
+  for (const sig of [{ args: {}, returns: 'number' }, { args: {}, returns: 'decimal' }, { args: {}, returns: { type: 'number', unit: 'zz' } }, { args: {}, returns: 'number', extra: 1 }]) {
+    assert.equal(parseUri('cell://math.example/pi', sig).fn, 'pi');
+  }
+  const sig = { args: { base: { type: 'string', unit: 'EUR', valid: 'x' } }, returns: 'number' };
+  assert.deepEqual(parseUri('cell://a.example/f?base=EUR', sig).args, { base: { type: 'string', value: 'EUR' } });
+  // An argument type outside the six fails when a value is read for it; a slice reads none.
+  assert.throws(() => parseUri('cell://a.example/f?base=EUR', { args: { base: { type: 'decimal', valid: false } }, returns: 'string' }), (e) => e.code === 'E_CANON_TYPE');
+  assert.deepEqual(parseUri('cell://a.example/f?base=*', { args: { base: { type: 'decimal', valid: false } }, returns: 'string' }).args, { base: '*' });
+  assert.throws(() => parseUri('cell://a.example/f?base=EUR', { args: { base: { type: 5, valid: false } }, returns: 'string' }), (e) => e.code === 'E_SCHEMA');
+  assert.throws(() => parseUri('cell://a.example/f?base=EUR', { args: { base: { valid: false } }, returns: 'string' }), (e) => e.code === 'E_SCHEMA');
+  assert.throws(() => parseUri('cell://a.example/f?base=%zz', { args: { base: { type: 'decimal', valid: false } }, returns: 'string' }), (e) => e.code === 'E_CANON_PERCENT');
+  // Something that is not a signature at all is a programmer error.
+  for (const bad of [null, undefined, 5, 'x', { returns: 'string' }, { args: 5 }]) assert.throws(() => parseUri('cell://math.example/pi', bad), TypeError);
 });
 
 test('outer grammar first (SPEC 5.1, 5.4 step 1): userinfo, port, empty parameter', () => {

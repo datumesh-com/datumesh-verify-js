@@ -23,9 +23,12 @@ test('unmodified content passes, at level signed (as Uint8Array, Buffer and Arra
     assert.equal(r.ok, true, r.detail);
     assert.equal(r.code, 'OK');
     assert.equal(r.level, 'signed');
+    assert.equal(r.blobChecked, true);
     assert.equal(r.hash, v.sha256);
   }
-  assert.equal(verify(v.input, keys).ok, true, 'without content, step 7.7 does not run');
+  const plain = verify(v.input, keys);
+  assert.equal(plain.ok, true, 'without content, step 7.7 does not run');
+  assert.equal(plain.blobChecked, false);
   assert.equal(verify(v.input, keys, undefined, undefined).ok, true);
 });
 
@@ -38,6 +41,7 @@ test('every single-bit flip of the content fails with E_BLOB_MISMATCH', () => {
     assert.equal(r.code, 'E_BLOB_MISMATCH', `bit ${i}`);
     assert.equal(r.ok, false);
     assert.equal(r.level, null);
+    assert.equal(r.blobChecked, false);
     assert.equal(r.hash, v.sha256);
     n++;
   }
@@ -76,12 +80,29 @@ test('step 7.7 runs after steps 1-6 and after step 7 when recomputing', () => {
   assert.equal(verify(v.input, keys, recompute, bad).code, 'E_FN_UNAVAILABLE');
 });
 
-test('content given for a receipt whose type is not blob is ignored', () => {
+test('content given for a receipt whose type is not blob is E_SCHEMA (step 7.7), after steps 1-6 and 7', () => {
   const s = vector('receipt/stored-number');
   const ks = Object.entries(s.keys).map(([h, e]) => keysFromResponse(h, e.https.status, e.https.body));
-  const r = verify(s.input, ks, null, new Uint8Array([1, 2, 3]));
-  assert.equal(r.ok, true);
-  assert.equal(r.level, 'signed');
+  for (const c of [new Uint8Array([1, 2, 3]), new Uint8Array()]) {
+    const r = verify(s.input, ks, null, c);
+    assert.equal(r.code, 'E_SCHEMA');
+    assert.equal(r.blobChecked, false);
+  }
+  assert.equal(verify(s.input, ks, s.recompute, new Uint8Array([1])).code, 'E_SCHEMA');
+  assert.equal(verify({ ...JSON.parse(s.input), sig: '0'.repeat(128) }, ks, null, new Uint8Array([1])).code, 'E_SIGNATURE');
+  const w = vector('invalid/receipt-content-not-blob');
+  assert.equal(verify(w.input, ks, w.recompute ?? null, Uint8Array.from(Buffer.from(w.blob_hex, 'hex'))).code, 'E_SCHEMA');
+});
+
+test('recomputation and the content check together: level recomputed, blobChecked true', () => {
+  const w = vector('receipt/blob-value-recomputed');
+  const ks = Object.entries(w.keys).map(([h, e]) => keysFromResponse(h, e.https.status, e.https.body));
+  const r = verify(w.input, ks, w.recompute, content);
+  assert.deepEqual([r.ok, r.level, r.blobChecked], [true, 'recomputed', true]);
+  const flipped = content.slice();
+  flipped[0] ^= 1;
+  assert.equal(verify(w.input, ks, w.recompute, flipped).code, 'E_BLOB_MISMATCH');
+  assert.deepEqual([verify(w.input, ks, w.recompute).level, verify(w.input, ks, w.recompute).blobChecked], ['recomputed', false]);
 });
 
 test('blob content of the wrong JavaScript type is a programmer error', () => {
