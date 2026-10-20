@@ -1,0 +1,34 @@
+name: release
+
+# Push a tag vX.Y.Z matching package.json's version. The full test suite runs first; the
+# publish uses npm Trusted Publishing (no token), configured for this file and environment.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Trusted Publishing needs npm 11.5.1 or later
+        run: npm install -g npm@11
+      - name: Check the tag matches the package version
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --provenance --access public
