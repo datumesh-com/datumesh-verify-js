@@ -46,7 +46,7 @@ for IMAGE in $IMAGES; do
     echo "node $(node --version)"
     echo "-- import:";  node example.mjs | tee esm.out
     echo "-- require:"; node example.cjs | tee cjs.out
-    grep -qx "true OK signed 501f744d910c585859a5be4f3b62385ed0d6803db53dbbf95dff5097a68bee0d" esm.out
+    grep -qx "true OK signed 19a5fe3a744c5792f747fb4c286ce396ab44b95922de4f07937502fe595b6f81" esm.out
     grep -qx "OK" cjs.out
     # The exports map resolves both conditions and ships types for both.
     node -e "const p=require(\"@datumesh/verify/package.json\"); console.log(p.name, p.version, \"spec\", p.datumesh.spec)"
@@ -59,13 +59,15 @@ docker run --rm -v "$WORK":/pkg:ro node:18-slim sh -ec '
   mkdir /app && cd /app && npm init -y >/dev/null
   npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz typescript@5.9.3
   cat > esm.mts <<TS
-import { verify, keysFromResponse, parseUri, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult } from "@datumesh/verify";
+import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult } from "@datumesh/verify";
 const k: KeysResult = keysFromResponse("rates.example.org", 404);
-const r: VerifyResult = verify("{}", k);
+const r: VerifyResult = verify("{}", k, null, new Uint8Array([1]));
 const code: string = r.code;
-const ref = parseUri("cell://math.example/pi", { args: {}, returns: "number" });
+const ref = parseUri("cell://math.example/pi", { args: {}, returns: { type: "number", unit: "1" } });
+const env: EnvelopeResult = checkEnvelope(404, "{\"outcome\":\"not_covered\"}", k);
+const unit: string | null = env.ok ? null : resolvedUnit("{}", "{}");
 const e: DatumeshError | null = null;
-console.log(SPEC_VERSION, code, ref.fn, e);
+console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, e);
 TS
   cat > cjs.cts <<TS
 import lib = require("@datumesh/verify");

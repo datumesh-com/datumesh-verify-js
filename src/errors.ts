@@ -1,5 +1,5 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.1.1';
+export const SPEC_VERSION = 'spec-0.2.0';
 
 /** Every error code defined by SPEC.md 10.2, in the order of that table. */
 export const ERROR_CODES = [
@@ -14,9 +14,11 @@ export const ERROR_CODES = [
   'E_CANON_PERCENT',
   'E_CANON_TYPE',
   'E_CANON_NUMBER',
+  'E_CANON_UNIT',
   'E_CANON_DATE',
   'E_CANON_INSTANT',
   'E_CANON_STRING',
+  'E_CANON_BLOB',
   'E_CANON_HEX',
   'E_CANON_LICENCE',
   'E_CANON_SET',
@@ -40,6 +42,8 @@ export const ERROR_CODES = [
   'E_INPUT_INVALID',
   'E_INPUT_UNDECLARED',
   'E_VALUE_MISMATCH',
+  'E_BLOB_MISMATCH',
+  'E_ENVELOPE',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -19,7 +19,7 @@ export const LIMITS = {
   keys: 64,
 } as const;
 
-export const TYPES = ['boolean', 'date', 'instant', 'number', 'string'] as const;
+export const TYPES = ['blob', 'boolean', 'date', 'instant', 'number', 'string'] as const;
 export type TypeName = (typeof TYPES)[number];
 export const VALID_TIME_TYPES: readonly string[] = ['date', 'instant', 'string'];
 
@@ -90,6 +90,11 @@ export function checkKeyRef(s: string, path: string): { host: string; id: string
 
 const NUMBER_RE = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/;
 
+/** SPEC 3.1: a canonical decimal of at most 128 characters. */
+export function isNumber(s: string): boolean {
+  return NUMBER_RE.test(s) && s !== '-0' && s.length <= LIMITS.number;
+}
+
 /** SPEC 3.1. Grammar (E_CANON_NUMBER) before the 128-character limit (E_CANON_LIMIT). */
 export function checkNumber(s: string, path: string): void {
   if (!NUMBER_RE.test(s) || s === '-0') fail('E_CANON_NUMBER', `not a canonical decimal: ${JSON.stringify(s)}`, path);
@@ -148,8 +153,23 @@ function hex4(cp: number): string {
   return cp.toString(16).toUpperCase().padStart(4, '0');
 }
 
+// SPEC 3.7: <sha256>:<length>:<type>/<subtype>, with RFC 6838 restricted names in lowercase.
+const BLOB_RE = /^[0-9a-f]{64}:(0|[1-9][0-9]*):([a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*)$/;
+const MAX_SAFE = '9007199254740991';
+export const MEDIA_TYPE_MAX = 128;
+
+/** SPEC 3.7. Grammar, then length <= 2^53 - 1, then media type <= 128 characters; all E_CANON_BLOB. */
+export function checkBlob(s: string, path: string): { sha256: string; length: number; mediaType: string } {
+  const m = BLOB_RE.exec(s);
+  if (!m) fail('E_CANON_BLOB', `not <sha256>:<length>:<type/subtype>: ${JSON.stringify(s)}`, path);
+  const len = m[1];
+  if (len.length > MAX_SAFE.length || (len.length === MAX_SAFE.length && len > MAX_SAFE)) fail('E_CANON_BLOB', `length above ${MAX_SAFE}`, path);
+  if (m[2].length > MEDIA_TYPE_MAX) fail('E_CANON_BLOB', `media type longer than ${MEDIA_TYPE_MAX} characters`, path);
+  return { sha256: s.slice(0, 64), length: Number(len), mediaType: m[2] };
+}
+
 const SPDX_RE = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
-const URL_RE = /^https:\/\/[!-~]+$/;
+export const URL_RE = /^https:\/\/[!-~]+$/;
 
 /**
  * SPEC 8.1 `licence`: an SPDX licence identifier or an https:// URL. SPEC.md gives no grammar;
@@ -177,5 +197,6 @@ export function checkTypedValue(type: TypeName, value: unknown, path: string): v
   if (type === 'number') checkNumber(value, path);
   else if (type === 'date') checkDate(value, path);
   else if (type === 'instant') checkInstant(value, path);
+  else if (type === 'blob') checkBlob(value, path);
   else checkString(value, path);
 }

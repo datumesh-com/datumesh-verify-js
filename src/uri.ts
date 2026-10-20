@@ -19,10 +19,14 @@ export interface CellRef {
   asof?: string;
 }
 
-/** A function descriptor's `signature` member (SPEC 7). */
+/** A unit in a signature (SPEC 7.1): a literal from units.md, an argument reference, or a rate. */
+export type UnitRef = { arg: string };
+export type Unit = string | UnitRef | { of: string | UnitRef; per: string | UnitRef };
+
+/** A function descriptor's `signature` member (SPEC 7). Numbers declare a unit. */
 export interface Signature {
-  args: Record<string, { type: TypeName; valid: boolean }>;
-  returns: TypeName;
+  args: Record<string, { type: TypeName; valid: boolean; unit?: Unit }>;
+  returns: Exclude<TypeName, 'number'> | { type: 'number'; unit: Unit };
 }
 
 const SCHEME = 'cell://';

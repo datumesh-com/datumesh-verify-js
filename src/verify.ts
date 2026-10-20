@@ -5,7 +5,8 @@ import { fromHex, sha256Hex } from './hash.js';
 import { has, newObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
 import { jcsBytes } from './jcs.js';
 import { collectSources, lookupKey, type Sources } from './keys.js';
-import { receiptCanonicalAndConsistent, receiptStructure, validate } from './validate.js';
+import { checkBlob } from './lexical.js';
+import { receiptCanonicalAndConsistent, receiptStructure, returnType, validate } from './validate.js';
 
 export interface VerifyResult {
   /** True when the receipt is signature-valid (and, if recompute was given, fully verified). */
@@ -127,8 +128,9 @@ function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): void {
   if (validNames.join('\u0000') !== declaredValid.join('\u0000')) {
     stop('E_VALID_MISMATCH', 'valid must echo exactly the declared valid-time arguments', '$.valid');
   }
-  // 7.4 Return type.
-  if (receipt.type !== sig.returns) stop('E_RETURN_TYPE', `function returns ${String(sig.returns)}`, '$.type');
+  // 7.4 Return type: `returns`, or its `type` member when it is an object.
+  const rt = returnType(sig);
+  if (receipt.type !== rt) stop('E_RETURN_TYPE', `function returns ${rt}`, '$.type');
   // 7.5 Inputs.
   const declaredInputs = desc.inputs as string[];
   const supplied = rc.inputs ?? {};
@@ -157,6 +159,20 @@ function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): void {
   if (v.type !== receipt.type || v.value !== receipt.value) stop('E_VALUE_MISMATCH', 'recomputed value differs from the receipt', '$.value');
 }
 
+/** Step 7.7: the content has exactly `length` bytes, then SHA-256 equal to the blob's hash. */
+function checkContent(receipt: JsonObject, content: Uint8Array): void {
+  const blob = checkBlob(receipt.value as string, '$.value'); // already checked in step 3
+  if (content.length !== blob.length) stop('E_BLOB_MISMATCH', `content is ${content.length} bytes, the blob says ${blob.length}`, '$.value');
+  if (sha256Hex(content) !== blob.sha256) stop('E_BLOB_MISMATCH', "the content's SHA-256 is not the blob's hash", '$.value');
+}
+
+function checkBlobArg(b: unknown): Uint8Array | null {
+  if (b === undefined || b === null) return null;
+  if (b instanceof Uint8Array) return b;
+  if (b instanceof ArrayBuffer) return new Uint8Array(b);
+  throw new TypeError('blob must be the content bytes (Uint8Array or ArrayBuffer)');
+}
+
 function checkRecomputeArg(rc: unknown): Recompute | null {
   if (rc === undefined || rc === null) return null;
   if (typeof rc !== 'object' || Array.isArray(rc)) throw new TypeError('recompute must be an object {descriptor, inputs, value}');
@@ -173,25 +189,31 @@ function checkRecomputeArg(rc: unknown): Recompute | null {
 /**
  * Verify a receipt (SPEC 10.1). `receipt` is JSON text, UTF-8 bytes or a parsed object (only
  * text and bytes allow duplicate-member detection). `keys` is a key document, a KeysResult, a
- * {keyId: publicKeyHex} map, or an array of these. With `recompute`, step 7 runs too.
+ * {keyId: publicKeyHex} map, or an array of these. With `recompute`, step 7 runs too. With
+ * `blob`, the content of a blob value, step 7.7 checks it when the receipt's type is `blob`
+ * (after step 7 when recomputing, otherwise right after step 6); it does not change `level`.
  *
  * Never throws for an invalid receipt or bad key material; throws TypeError only when an
  * argument is of the wrong kind altogether.
  */
-export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute | null): VerifyResult {
+export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute | null, blob?: Uint8Array | ArrayBuffer | null): VerifyResult {
   const sources = collectSources(keys);
   const rc = checkRecomputeArg(recomputeArg);
+  const content = checkBlobArg(blob);
   let hash: string | null = null;
   try {
     const { receipt: r } = verifySigned(receipt, sources, (h) => (hash = h));
     if (rc) recompute(r, rc, sources);
+    const checked = content !== null && r.type === 'blob';
+    if (checked) checkContent(r, content);
+    const what = rc ? 'fully verified: signature valid and value recomputed' : `signature-valid: signed by ${r.computed_by as string}`;
     return {
       ok: true,
       code: 'OK',
       level: rc ? 'recomputed' : 'signed',
       hash,
       key: r.computed_by as string,
-      detail: rc ? 'fully verified: signature valid and value recomputed' : `signature-valid: signed by ${r.computed_by as string}`,
+      detail: checked ? `${what}; blob content matches` : what,
       path: null,
     };
   } catch (e) {
@@ -199,3 +221,10 @@ export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute
     throw e; // a bug in this library, not a property of the receipt
   }
 }
+
+/** Steps 1-6 for an already-parsed receipt (used by checkEnvelope). Throws a Stop. */
+export function verifyEmbedded(receipt: JsonValue, sources: Sources): { receipt: JsonObject; hash: string } {
+  return verifySigned(receipt, sources, () => undefined);
+}
+
+export { Stop };

@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.1.1).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.2.0).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -9,17 +9,18 @@ import { sha256Hex, keyIdOf, fromHex } from './hash.js';
 import { newObject, toJson, type JsonObject, type JsonValue } from './json.js';
 import { jcsBytes } from './jcs.js';
 import { isHex } from './lexical.js';
-import { KINDS, inferKind, validate, type Kind } from './validate.js';
+import { KINDS, cellUnit, inferKind, validate, type Kind } from './validate.js';
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
 export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature } from './uri.js';
+export { checkEnvelope, type EnvelopeResult, type Outcome, type Trust } from './envelope.js';
+export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
 export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.1.1';
+export const VERSION = '0.2.0';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);
@@ -61,6 +62,21 @@ export function receiptPayload(receipt: unknown): Uint8Array {
   const o = newObject();
   for (const k of Object.keys(r)) if (k !== 'sig') o[k] = r[k];
   return jcsBytes(o);
+}
+
+/**
+ * The unit of a cell's value (SPEC 7.1, units.md section 3): the descriptor's return unit with
+ * the cell's argument values substituted, e.g. "USD/EUR"; null when the function does not
+ * return a number. `descriptor` must be the cell's function (E_FN_HASH_MISMATCH otherwise).
+ * Both are JSON text, bytes or parsed objects. Throws DatumeshError like canonicalize, and
+ * E_ARG_MISSING / E_SLICE / E_ARG_TYPE / E_CANON_UNIT when a referenced argument cannot give a
+ * unit.
+ */
+export function resolvedUnit(descriptor: unknown, cell: unknown): string | null {
+  if (descriptor === undefined || cell === undefined) throw new TypeError('resolvedUnit(descriptor, cell) needs both arguments');
+  const d = toJson(descriptor);
+  const c = toJson(cell);
+  return cellUnit(d, c, (x) => sha256Hex(jcsBytes(x)));
 }
 
 /** Key id of an Ed25519 public key given as 64 lowercase hex digits (SPEC 9.1). Throws DatumeshError. */

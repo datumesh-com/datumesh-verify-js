@@ -18,6 +18,7 @@ import {
   checkTypedValue,
   isTypeName,
 } from './lexical.js';
+import { canonUnit, resolveUnit, structUnit } from './units.js';
 
 export type Kind = 'scalar' | 'cell' | 'ref' | 'function' | 'receipt' | 'jcs';
 export const KINDS: readonly Kind[] = ['scalar', 'cell', 'ref', 'function', 'receipt', 'jcs'];
@@ -93,11 +94,19 @@ export function structSignature(v: JsonValue, path: string): void {
   for (const k of sortedKeys(args)) {
     const p = memberPath(argsPath, k);
     const d = expectObject(args[k], p);
-    members(d, ['type', 'valid'], [], p);
+    members(d, ['type', 'valid'], ['unit'], p);
     expectString(d, 'type', p);
+    if (has(d, 'unit')) structUnit(d.unit, memberPath(p, 'unit'));
     if (typeof d.valid !== 'boolean') fail('E_SCHEMA', 'valid must be a boolean', memberPath(p, 'valid'));
   }
-  expectString(sig, 'returns', path);
+  // SPEC 7: a type name, or {"type", "unit"} (the unit's absence is E_CANON_UNIT, in step 3).
+  const rp = memberPath(path, 'returns');
+  const r = sig.returns;
+  if (typeof r === 'string') return;
+  if (!isObject(r)) fail('E_SCHEMA', 'returns must be a type name or an object', rp);
+  members(r, ['type'], ['unit'], rp);
+  expectString(r, 'type', rp);
+  if (has(r, 'unit')) structUnit(r.unit, memberPath(rp, 'unit'));
 }
 
 const RECEIPT_MEMBERS = [
@@ -195,12 +204,36 @@ export function canonSignature(sig: JsonObject, path: string): void {
     const p = memberPath(argsPath, k);
     checkArgName(k, p);
     const d = args[k] as JsonObject;
+    // SPEC 7: type, then unit, then valid.
     if (!isTypeName(d.type)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(d.type)}`, memberPath(p, 'type'));
+    if (d.type === 'number') {
+      if (!has(d, 'unit')) fail('E_CANON_UNIT', 'a number argument declares its unit', p);
+      canonUnit(d.unit, args, memberPath(p, 'unit'));
+    } else if (has(d, 'unit')) {
+      fail('E_CANON_UNIT', 'only number arguments have a unit', memberPath(p, 'unit'));
+    }
     if (d.valid === true && !VALID_TIME_TYPES.includes(d.type)) {
       fail('E_CANON_TYPE', 'a valid-time argument must be a date, instant or string', p);
     }
   }
-  if (!isTypeName(sig.returns)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(sig.returns)}`, memberPath(path, 'returns'));
+  const rp = memberPath(path, 'returns');
+  const r = sig.returns;
+  if (typeof r === 'string') {
+    if (!isTypeName(r)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(r)}`, rp);
+    if (r === 'number') fail('E_CANON_UNIT', 'a number return is {"type": "number", "unit": ...}, not the bare name', rp);
+    return;
+  }
+  const o = r as JsonObject;
+  if (!isTypeName(o.type)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(o.type)}`, memberPath(rp, 'type'));
+  if (o.type !== 'number') fail('E_CANON_UNIT', 'only a number return is written as an object', rp);
+  if (!has(o, 'unit')) fail('E_CANON_UNIT', 'a number return declares its unit', rp);
+  canonUnit(o.unit, args, memberPath(rp, 'unit'));
+}
+
+/** The return type named by a valid signature's `returns` (SPEC 10.1 step 7.4). */
+export function returnType(sig: JsonObject): string {
+  const r = sig.returns;
+  return typeof r === 'string' ? r : ((r as JsonObject).type as string);
 }
 
 function canonFunction(o: JsonObject, path: string): void {
@@ -315,6 +348,21 @@ export function validate(v: JsonValue, kind: Kind, path = '$'): void {
       consistency(v as JsonObject, path);
       return;
   }
+}
+
+/**
+ * The unit of a cell's value (SPEC 7.1, units.md 3). Order: the descriptor's structure, the
+ * cell's structure, the cell's canonical form, fn_hash against the descriptor
+ * (E_FN_HASH_MISMATCH), the descriptor's canonical form, then resolution.
+ */
+export function cellUnit(desc: JsonValue, cell: JsonValue, fnHash: (d: JsonValue) => string): string | null {
+  structFunction(desc, 'descriptor');
+  structCell(cell, 'cell', false);
+  canonCell(cell as JsonObject, 'cell');
+  if (fnHash(desc) !== (cell as JsonObject).fn_hash) fail('E_FN_HASH_MISMATCH', 'the descriptor does not hash to cell.fn_hash', 'descriptor');
+  canonFunction(desc as JsonObject, 'descriptor');
+  const sig = (desc as JsonObject).signature as JsonObject;
+  return resolveUnit(sig.returns, (cell as JsonObject).args as JsonObject, 'descriptor.signature.returns', 'cell.args');
 }
 
 /** Receipt step 2 only: true when the receipt has the right members and JSON types. */
