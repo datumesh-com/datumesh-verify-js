@@ -17,6 +17,8 @@ export const OUTPUTS = {
   keyid: ['key_id'],
   keys: ['key_ids'],
   receipt: ['canonical', 'sha256', 'sig', 'level'],
+  unit: ['unit'],
+  envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
 };
 
 const text = (bytes) => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
@@ -76,12 +78,33 @@ export function makeRunner(lib, sha256) {
           break;
         }
         case 'receipt': {
-          const res = lib.verify(inputOf(v), receiptKeys(lib, v), v.recompute ?? null);
+          const blob = v.blob_hex !== undefined ? hexToBytes(v.blob_hex) : null;
+          const res = lib.verify(inputOf(v), receiptKeys(lib, v), v.recompute ?? null, blob);
           if (!res.ok) return { id: v.id, error: res.code };
           out.canonical = text(lib.receiptPayload(inputOf(v)));
           out.sha256 = res.hash;
           out.sig = JSON.parse(text(lib.canonicalize(inputOf(v), 'receipt'))).sig;
           out.level = res.level;
+          break;
+        }
+        case 'unit': {
+          // The input is JSON text of {"cell", "descriptor"}. Parse it strictly (SPEC 6.1) with
+          // the library, check the wrapper, and hand both members to resolvedUnit.
+          const w = JSON.parse(text(lib.canonicalize(inputOf(v), 'jcs')));
+          if (w === null || typeof w !== 'object' || Array.isArray(w)) return { id: v.id, error: 'E_SCHEMA' };
+          const names = Object.keys(w).sort();
+          if (names.join() !== 'cell,descriptor') return { id: v.id, error: 'E_SCHEMA' };
+          out.unit = lib.resolvedUnit(w.descriptor, w.cell);
+          break;
+        }
+        case 'envelope': {
+          const res = lib.checkEnvelope(v.status, inputOf(v), receiptKeys(lib, v));
+          if (!res.ok) return { id: v.id, error: res.code };
+          out.outcome = res.outcome;
+          if (res.receiptHash !== null) {
+            out.trust = res.trust;
+            out.receipt_hash = res.receiptHash;
+          }
           break;
         }
         default:

@@ -28,7 +28,7 @@ test('formatUri percent-encodes every non-literal byte with uppercase hex', () =
   const ref = { ns: 'rates.example.org', fn: 'fx_rate', args: { base: { type: 'string', value: 'a b+c/\u{FC}*' }, date: '*', quote: { type: 'string', value: '' } } };
   const uri = formatUri(ref);
   assert.equal(uri, 'cell://rates.example.org/fx_rate?base=a%20b%2Bc%2F%C3%BC%2A&date=*&quote=');
-  const sig = { args: { base: { type: 'string', valid: false }, date: { type: 'date', valid: true }, quote: { type: 'string', valid: false } }, returns: 'number' };
+  const sig = { args: { base: { type: 'string', valid: false }, date: { type: 'date', valid: true }, quote: { type: 'string', valid: false } }, returns: { type: 'number', unit: 'EUR' } };
   assert.deepEqual(parseUri(uri, sig), ref);
 });
 
@@ -41,10 +41,14 @@ test('formatUri rejects invalid references with their codes', () => {
 test('parseUri validates the signature it is given', () => {
   assert.throws(() => parseUri('cell://math.example/pi', { args: {}, returns: 'decimal' }), (e) => e.code === 'E_CANON_TYPE' && e.path === 'signature.returns');
   assert.throws(() => parseUri('cell://math.example/pi', null), TypeError);
+  // Units are part of the signature (SPEC 7.1): a spec-0.1.1 signature with a bare number return
+  // is not a valid signature any more (DEFECTS.md, spec-0.2.0 section).
+  assert.throws(() => parseUri('cell://math.example/pi', { args: {}, returns: 'number' }), (e) => e.code === 'E_CANON_UNIT' && e.path === 'signature.returns');
+  assert.equal(parseUri('cell://math.example/pi', { args: {}, returns: { type: 'number', unit: '1' } }).fn, 'pi');
 });
 
 test('outer grammar first (SPEC 5.1, 5.4 step 1): userinfo, port, empty parameter', () => {
-  const sig = { args: { base: { type: 'string', valid: false } }, returns: 'number' };
+  const sig = { args: { base: { type: 'string', valid: false } }, returns: { type: 'number', unit: 'EUR' } };
   for (const uri of ['cell://u@rates.example.org/fx_rate?base=x', 'cell://rates.example.org:443/fx_rate?base=x', 'cell://Rates.example.org/fx_rate?base=x&&', 'cell://rates.example.org/fx_rate?base', 'cell://rates.example.org/fx_rate?', 'cell://rates.example.org/fx_rate#x', 'CELL://rates.example.org/fx_rate']) {
     assert.throws(() => parseUri(uri, sig), (e) => e.code === 'E_PARSE_URI', uri);
   }
@@ -54,7 +58,7 @@ test('outer grammar first (SPEC 5.1, 5.4 step 1): userinfo, port, empty paramete
 });
 
 test('asof placement: a trailing asof is the parameter, earlier ones repeat it', () => {
-  const sig = { args: { base: { type: 'string', valid: false }, date: { type: 'date', valid: true }, quote: { type: 'string', valid: false } }, returns: 'number' };
+  const sig = { args: { base: { type: 'string', valid: false }, date: { type: 'date', valid: true }, quote: { type: 'string', valid: false } }, returns: { type: 'number', unit: 'EUR' } };
   const A = 'asof=2024-03-16T09:00:00.000000Z';
   const B = 'cell://rates.example.org/fx_rate?';
   const cases = [

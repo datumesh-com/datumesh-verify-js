@@ -14,12 +14,14 @@ const keys = Object.entries(stored.keys).map(([h, e]) => keysFromResponse(h, e.h
 
 test('SPEC_VERSION and package metadata', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(SPEC_VERSION, 'spec-0.1.1');
+  assert.equal(SPEC_VERSION, 'spec-0.2.0');
+  assert.equal(esm.VERSION, '0.2.0');
   assert.equal(pkg.datumesh.spec, SPEC_VERSION);
   assert.equal(pkg.version, esm.VERSION);
   assert.equal(pkg.name, '@datumesh/verify');
-  assert.equal(ERROR_CODES.length, 37);
+  assert.equal(ERROR_CODES.length, 41);
   assert.ok(ERROR_CODES.includes('E_KEY_UNAVAILABLE'));
+  for (const c of ['E_CANON_UNIT', 'E_CANON_BLOB', 'E_BLOB_MISMATCH', 'E_ENVELOPE']) assert.ok(ERROR_CODES.includes(c), c);
 });
 
 test('ESM and CommonJS builds export the same API', () => {

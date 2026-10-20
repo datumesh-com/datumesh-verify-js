@@ -2,7 +2,8 @@
 // Node built-in reachable from the library would fail the bundle) and run in headless Chrome.
 // Runs every spec vector through the same runner logic as the Node conformance test, with
 // WebCrypto for the independent SHA-256, plus URI round trips, the Ed25519 edge cases and the
-// full bit-flip sweep of one receipt. Writes a JSON summary into <pre id="result">.
+// full bit-flip sweeps of one receipt and of the blob receipt's content. Writes a JSON summary
+// into <pre id="result">.
 import * as lib from '../../dist/esm/index.js';
 import { verifyEd25519Strict } from '../../dist/esm/ed25519.js';
 import { makeRunner, OUTPUTS, hexToBytes, receiptKeys } from '../../tools/vector-runner.mjs';
@@ -40,6 +41,20 @@ async function main() {
     b[i >> 3] ^= 1 << (i & 7);
     summary.bitFlips++;
     if (lib.verify(b, keys).ok) summary.bitFlipFailures++;
+  }
+  // Step 7.7 in the browser: the library's own SHA-256 checks blob content (no WebCrypto, no
+  // network). The unmodified content passes; every single-bit flip fails with E_BLOB_MISMATCH.
+  const bv = vectors.find((x) => x.id === 'receipt/blob-value');
+  const bkeys = receiptKeys(lib, bv);
+  const content = hexToBytes(bv.blob_hex);
+  summary.blobOk = lib.verify(bv.input, bkeys, null, content).ok;
+  summary.blobFlips = 0;
+  summary.blobFlipFailures = 0;
+  for (let i = 0; i < content.length * 8; i++) {
+    const c = content.slice();
+    c[i >> 3] ^= 1 << (i & 7);
+    summary.blobFlips++;
+    if (lib.verify(bv.input, bkeys, null, c).code !== 'E_BLOB_MISMATCH') summary.blobFlipFailures++;
   }
   return summary;
 }
