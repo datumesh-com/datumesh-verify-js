@@ -1,0 +1,56 @@
+{
+  "name": "@datumesh/verify",
+  "version": "0.1.1",
+  "description": "Verifier for Datumesh receipts: strict canonical JSON (RFC 8785), cell URIs, key documents and Ed25519 signatures.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datumesh-com/datumesh-verify-js.git"
+  },
+  "homepage": "https://datumesh.com",
+  "keywords": ["datumesh", "receipt", "verify", "ed25519", "jcs", "rfc8785", "canonical-json"],
+  "datumesh": {
+    "spec": "spec-0.1.1"
+  },
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test test/",
+    "conformance": "node tools/check-vectors.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0",
+    "canonicalize": "2.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "typescript": "5.9.3"
+  }
+}
