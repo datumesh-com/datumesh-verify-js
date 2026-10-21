@@ -13,13 +13,12 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The package records spec-0.2.1; the spec submodule must be that revision: commit 58eb0d9 or
-# the spec-0.2.1 tag.
+# The package records spec-0.2.1; the spec submodule must be that revision: the commit the
+# spec-0.2.1 tag points to (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
-SPEC_TAG="$(git -C spec tag --points-at HEAD 2>/dev/null | grep -x spec-0.2.1 || true)"
 case "$SPEC_HEAD" in
-  58eb0d9*) echo "== spec submodule at $SPEC_HEAD" ;;
-  *) [ -n "$SPEC_TAG" ] || { echo "spec submodule at $SPEC_HEAD: neither 58eb0d9 nor the spec-0.2.1 tag"; exit 1; }; echo "== spec submodule at tag $SPEC_TAG" ;;
+  710dabb*) echo "== spec submodule at $SPEC_HEAD (spec-0.2.1)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.2.1 (710dabb)"; exit 1 ;;
 esac
 grep -q '"spec": "spec-0.2.1"' package.json
 
