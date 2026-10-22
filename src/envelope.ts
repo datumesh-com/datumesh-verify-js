@@ -218,12 +218,11 @@ export function checkEnvelope(status: number, body: unknown, keys: unknown, requ
   // Step 5: the receipt answers the request.
   const cellId = sha256Hex(jcsBytes(r.receipt.cell as JsonObject));
   if (cellId !== request.cell_id) return fail('E_ENVELOPE', `the receipt is for cell ${cellId}, not the requested ${request.cell_id}`, '$.receipt.cell', r.hash);
-  // With a requested asof: equal for ok; at or before it for stale (D31). Instants are fixed
+  // With a requested asof: at or before it, for ok and stale alike (D31, revised in spec-0.3.0). Instants are fixed
   // width, so string order is time order (SPEC 3.3).
   const asof = r.receipt.asof as string;
-  if (request.asof !== undefined && (outcome === 'stale' ? !(asof <= request.asof) : asof !== request.asof)) {
-    const want = outcome === 'stale' ? `at or before the requested ${request.asof}` : `the requested ${request.asof}`;
-    return fail('E_ENVELOPE', `the receipt answers asof ${asof}, not ${want}`, '$.receipt.asof', r.hash);
+  if (request.asof !== undefined && !(asof <= request.asof)) {
+    return fail('E_ENVELOPE', `the receipt answers asof ${asof}, later than the requested ${request.asof}`, '$.receipt.asof', r.hash);
   }
   // Step 6.
   const trust = env.trust as Trust;

@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -20,6 +20,44 @@ disagree), a **gap** (the prose does not decide the question), or **underspecifi
 exists but its exact form had to be inferred).
 
 ---
+
+# spec-0.3.0
+
+`spec-0.3.0` (spec commit `3bac3d4`, 365 vectors) makes two time rules more permissive (D17,
+D31), adds `E_EVAL_UNAVAILABLE` (10.1 step 7.6), and settles three library questions. Worked
+from the diff of `SPEC.md`, `units.md`, `schemas/` and `vectors/` between `710dabb` and
+`3bac3d4`; as before, `tools/*.py`, `tests/` and `crosscheck/` scripts were not read.
+
+| Entry / change | Status at `3bac3d4` | Library change |
+|---|---|---|
+| 32 (media type length) | Resolved (3.7: the limit is on the whole media type, no per-name limit) | none: already so; a test pins `a/` + 126 accepted, + 127 rejected, either side |
+| D17 revised (8.2, 10.1 step 7.5) | Input `asof` at or before the receipt's | `E_TIME_ORDER` only for a later input `asof` (was: any other) |
+| D31 revised (5.5 step 5) | `ok` binds like `stale` | `checkEnvelope`: receipt `asof` at or before the requested one for `ok` too |
+| `E_EVAL_UNAVAILABLE` (10.1 step 7.6, 10.2) | New code | Added to `ERROR_CODES` after `E_VALUE_MISMATCH` (42 codes). `recompute.value` is now optional: without it, once 7.1-7.5 pass, `verify` returns `ok: true`, `level: "signed"`, `code: "E_EVAL_UNAVAILABLE"`, `path: "$.value"`; step 7.7 still runs (pass: `blobChecked` true, code kept; failure: ordinary `E_BLOB_MISMATCH`). `checkEnvelope` accepts it as an `error` envelope's `error` (not for `bad_request`). |
+| D35 (10.1 step 7.1) | `null` is a descriptor offered | `recompute.descriptor: null` is now `E_FN_HASH_MISMATCH` (was `E_FN_UNAVAILABLE`); only `undefined` (or no member) is unavailable |
+| 9.3 / 11 (integer 200) | Only the integer 200 is a retrieved document | none in behaviour (any `status !== 200` was already `E_KEY_UNAVAILABLE`); `keysFromResponse`'s `status` parameter is typed `unknown` and a non-number gets its own detail. The runner now passes an env's status as given, so `"200"` and a missing status reach the library. |
+
+## 36. Library note: a descriptor given as a JS string is JSON text (10.1 step 7.1, 11)
+
+- **Observation.** 10.1 step 7.1 says what is obtained is a JSON value, and bytes are parsed
+  strictly first. This library has always taken `recompute.descriptor` as a parsed value, JSON
+  text (a JS string) or bytes. A JS string is therefore text to parse, never a string value, so
+  a caller cannot hand over the JSON string value itself; the conformance runner passes a
+  vector's descriptor as `JSON.stringify(value)`, which keeps a string a string and `null` null
+  (`invalid/receipt-descriptor-text`, `invalid/receipt-descriptor-null`). Kept for API
+  compatibility; every result agrees with the spec, since any string value fails the hash check
+  either way.
+- **No spec change proposed.**
+
+## 37. Gap (minor): an env `status` of `200.0` (9.3, 11)
+
+- **Problem.** 9.3 and 11 now say only "the integer 200" is a retrieved document. In a vector
+  `env`, the status is a JSON number; JavaScript (like any parser reading numbers as doubles)
+  cannot tell `200.0` or `2e2` from `200`, so such an env would count as retrieved here. No
+  vector uses that form, and an HTTP status line cannot carry it.
+- **Resolution.** A JS number equal to 200 is the integer 200.
+- **Proposed wording (11).** "In an `env`, `status` is an integer HTTP status written without
+  fraction or exponent, or the string `"error"`; ..."
 
 # spec-0.2.1
 
@@ -360,7 +398,7 @@ changed, with tests for both sides of the boundary.
 - **Resolution.** None needed; the library does not use the schemas at run time.
 - **Proposed fix.** Serialise the schemas with `ensure_ascii=True` (or escape C0/C1 controls).
 
-## 32. Note: blob media types and RFC 6838 (3.7)
+## 32. Note: blob media types and RFC 6838 (3.7) [resolved in spec-0.3.0]
 
 - **Observation (not a defect in the rules).** RFC 6838 limits each restricted name to 127
   characters; 3.7 limits the whole media type to 128, which implies at most 126 per name. The

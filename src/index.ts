@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.2.1).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.3.0).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -20,7 +20,7 @@ export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.2.1';
+export const VERSION = '0.3.0';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);

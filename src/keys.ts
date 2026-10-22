@@ -109,14 +109,19 @@ function docResult(host: string, parse: () => JsonValue): KeysResult {
 
 /**
  * Interpret the HTTPS response for https://<host>/.well-known/datumesh.json (SPEC 9.3).
- * `status` is the HTTP status, or null for a network, DNS, TLS or timeout failure. `body` is the
- * response body as text or bytes. Never throws.
+ * `status` is the HTTP status, or null for a network, DNS, TLS or timeout failure. Only the
+ * integer 200 is a retrieved document: any other value (a string "200" included, or undefined)
+ * is E_KEY_UNAVAILABLE. `body` is the response body as text or bytes. Never throws.
  */
-export function keysFromResponse(host: string, status: number | null, body?: string | Uint8Array | null): KeysResult {
+export function keysFromResponse(host: string, status: unknown, body?: string | Uint8Array | null): KeysResult {
   const h = typeof host === 'string' ? host : String(host);
   try {
-    if (status === null || status === undefined) {
+    if (status === null) {
       return { ok: false, code: 'E_KEY_UNAVAILABLE', host: h, detail: 'network, DNS, TLS or timeout failure' };
+    }
+    if (status === undefined) return { ok: false, code: 'E_KEY_UNAVAILABLE', host: h, detail: 'no HTTP status' };
+    if (typeof status !== 'number') {
+      return { ok: false, code: 'E_KEY_UNAVAILABLE', host: h, detail: `HTTP status ${JSON.stringify(String(status))} is not an integer (only the integer 200 is a retrieved document)` };
     }
     if (status !== 200) {
       return { ok: false, code: 'E_KEY_UNAVAILABLE', host: h, detail: `HTTP status ${String(status)} (only 200 is accepted; redirects are not followed)` };

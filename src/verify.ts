@@ -9,9 +9,17 @@ import { checkBlob } from './lexical.js';
 import { receiptCanonicalAndConsistent, receiptStructure, returnType, validate } from './validate.js';
 
 export interface VerifyResult {
-  /** True when the receipt is signature-valid (and, if recompute was given, fully verified). */
+  /**
+   * True when the receipt is signature-valid (and, if recompute was given with a value, fully
+   * verified).
+   */
   ok: boolean;
-  /** "OK" or a SPEC 10.2 error code. */
+  /**
+   * "OK" or a SPEC 10.2 error code. With `ok` true it is "OK", or `E_EVAL_UNAVAILABLE` when
+   * recompute was given without a value: steps 7.1-7.5 passed but the function was not evaluated
+   * (SPEC 10.1 step 7.6), so `level` is "signed" and `path` is "$.value". That is the one code
+   * reported with success.
+   */
   code: 'OK' | ErrorCode;
   /** "signed" (steps 1-6) or "recomputed" (steps 1-7) when ok, else null. */
   level: 'signed' | 'recomputed' | null;
@@ -29,12 +37,21 @@ export interface VerifyResult {
 
 /** Input for SPEC 10.1 step 7. The library does not evaluate functions; `value` is the result. */
 export interface Recompute {
-  /** The function descriptor for cell.fn_hash (object or JSON text); absent: E_FN_UNAVAILABLE. */
+  /**
+   * The function descriptor for cell.fn_hash: a parsed JSON value, or JSON text / UTF-8 bytes,
+   * parsed strictly first. Absent (undefined): E_FN_UNAVAILABLE. Anything else obtained, `null`
+   * included, is a descriptor offered: if it is not the descriptor it fails the hash check
+   * (E_FN_HASH_MISMATCH; SPEC 10.1 step 7.1). A JS string is always JSON text.
+   */
   descriptor?: unknown;
   /** Input receipts by receipt hash, as JSON text (or bytes, or parsed objects). */
   inputs?: Record<string, unknown>;
-  /** What evaluating the function produced: a typed scalar. */
-  value: { type: string; value: string | boolean };
+  /**
+   * What evaluating the function produced: a typed scalar. Absent (undefined) when the function
+   * could not be evaluated: once 7.1-7.5 pass, the result is success at level "signed" with code
+   * E_EVAL_UNAVAILABLE (SPEC 10.1 step 7.6).
+   */
+  value?: { type: string; value: string | boolean };
 }
 
 class Stop extends Error {
@@ -96,11 +113,12 @@ function verifySigned(input: unknown, sources: Sources, setHash: (h: string) => 
   return { receipt, hash };
 }
 
-function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): void {
+/** Step 7. Throws Stop; returns false when 7.6 could not run (no value: E_EVAL_UNAVAILABLE). */
+function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): boolean {
   const cell = receipt.cell as JsonObject;
   const cellArgs = cell.args as JsonObject;
-  // 7.1 Descriptor.
-  if (rc.descriptor === undefined || rc.descriptor === null) stop('E_FN_UNAVAILABLE', `no descriptor for ${cell.fn_hash as string}`, '$.cell.fn_hash');
+  // 7.1 Descriptor. Only obtaining nothing is unavailability; null is a descriptor offered (D35).
+  if (rc.descriptor === undefined) stop('E_FN_UNAVAILABLE', `no descriptor for ${cell.fn_hash as string}`, '$.cell.fn_hash');
   let desc: JsonObject;
   try {
     const d = toJson(rc.descriptor);
@@ -151,14 +169,18 @@ function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): void {
     if (!declaredInputs.includes(`${ic.ns as string}/${ic.fn as string}`)) {
       stop('E_INPUT_UNDECLARED', `input ${h} is a cell of an undeclared function`, '$.inputs');
     }
-    if (inner.receipt.asof !== receipt.asof) stop('E_TIME_ORDER', "input receipts must share the receipt's asof", '$.inputs');
+    // At or before the receipt's asof (D17, revised in spec-0.3.0); instants are fixed width, so
+    // string order is time order (SPEC 3.3).
+    if (!((inner.receipt.asof as string) <= (receipt.asof as string))) stop('E_TIME_ORDER', `input ${h} has asof ${inner.receipt.asof as string}, after the receipt's asof`, '$.inputs');
     const itx = inner.receipt.tx as string;
     if (latestTx === null || itx > latestTx) latestTx = itx;
   }
   if (latestTx !== null && receipt.tx !== latestTx) stop('E_TIME_ORDER', 'tx must be the latest input tx', '$.tx');
-  // 7.6 Value.
+  // 7.6 Value. No value: the function could not be evaluated (E_EVAL_UNAVAILABLE, not a failure).
   const v = rc.value;
+  if (v === undefined) return false;
   if (v.type !== receipt.type || v.value !== receipt.value) stop('E_VALUE_MISMATCH', 'recomputed value differs from the receipt', '$.value');
+  return true;
 }
 
 /**
@@ -183,8 +205,8 @@ function checkRecomputeArg(rc: unknown): Recompute | null {
   if (rc === undefined || rc === null) return null;
   if (typeof rc !== 'object' || Array.isArray(rc)) throw new TypeError('recompute must be an object {descriptor, inputs, value}');
   const r = rc as Recompute;
-  if (!r.value || typeof r.value !== 'object' || typeof r.value.type !== 'string' || (typeof r.value.value !== 'string' && typeof r.value.value !== 'boolean')) {
-    throw new TypeError('recompute.value must be the evaluated typed scalar {type, value}');
+  if (r.value !== undefined && (!r.value || typeof r.value !== 'object' || typeof r.value.type !== 'string' || (typeof r.value.value !== 'string' && typeof r.value.value !== 'boolean'))) {
+    throw new TypeError('recompute.value must be the evaluated typed scalar {type, value}, or absent when the function could not be evaluated');
   }
   if (r.inputs !== undefined && (typeof r.inputs !== 'object' || r.inputs === null || Array.isArray(r.inputs))) {
     throw new TypeError('recompute.inputs must be an object mapping receipt hash to receipt JSON');
@@ -195,7 +217,9 @@ function checkRecomputeArg(rc: unknown): Recompute | null {
 /**
  * Verify a receipt (SPEC 10.1). `receipt` is JSON text, UTF-8 bytes or a parsed object (only
  * text and bytes allow duplicate-member detection). `keys` is a key document, a KeysResult, a
- * {keyId: publicKeyHex} map, or an array of these. With `recompute`, step 7 runs too. With
+ * {keyId: publicKeyHex} map, or an array of these. With `recompute`, step 7 runs too; without
+ * its `value`, steps 7.1-7.5 run and the result is success at level "signed" with code
+ * E_EVAL_UNAVAILABLE (path "$.value") unless they fail. With
  * `blob`, the content of a blob value, step 7.7 runs last (after step 7 when recomputing,
  * otherwise right after step 6): E_SCHEMA if the value is not a blob, E_BLOB_MISMATCH if the
  * content does not match. It does not change `level`; `blobChecked` reports it.
@@ -210,18 +234,23 @@ export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute
   let hash: string | null = null;
   try {
     const { receipt: r } = verifySigned(receipt, sources, (h) => (hash = h));
-    if (rc) recompute(r, rc, sources);
+    const evaluated = rc ? recompute(r, rc, sources) : false;
     const checked = content !== null;
-    if (checked) checkContent(r, content);
-    const what = rc ? 'fully verified: signature valid and value recomputed' : `signature-valid: signed by ${r.computed_by as string}`;
+    if (checked) checkContent(r, content); // 7.7 also after E_EVAL_UNAVAILABLE; its failure replaces the code
+    const unavailable = rc !== null && !evaluated;
+    const what = evaluated
+      ? 'fully verified: signature valid and value recomputed'
+      : unavailable
+        ? `signature-valid: signed by ${r.computed_by as string}; descriptor, arguments and inputs check out, but the function could not be evaluated, so the value was not recomputed`
+        : `signature-valid: signed by ${r.computed_by as string}`;
     return {
       ok: true,
-      code: 'OK',
-      level: rc ? 'recomputed' : 'signed',
+      code: unavailable ? 'E_EVAL_UNAVAILABLE' : 'OK',
+      level: evaluated ? 'recomputed' : 'signed',
       hash,
       key: r.computed_by as string,
       detail: checked ? `${what}; blob content matches` : what,
-      path: null,
+      path: unavailable ? '$.value' : null,
       blobChecked: checked,
     };
   } catch (e) {
