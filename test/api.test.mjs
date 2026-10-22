@@ -14,12 +14,12 @@ const keys = Object.entries(stored.keys).map(([h, e]) => keysFromResponse(h, e.h
 
 test('SPEC_VERSION and package metadata', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(SPEC_VERSION, 'spec-0.2.1');
-  assert.equal(esm.VERSION, '0.2.1');
+  assert.equal(SPEC_VERSION, 'spec-0.3.0');
+  assert.equal(esm.VERSION, '0.3.0');
   assert.equal(pkg.datumesh.spec, SPEC_VERSION);
   assert.equal(pkg.version, esm.VERSION);
   assert.equal(pkg.name, '@datumesh/verify');
-  assert.equal(ERROR_CODES.length, 41);
+  assert.equal(ERROR_CODES.length, 42);
   assert.ok(ERROR_CODES.includes('E_KEY_UNAVAILABLE'));
   for (const c of ['E_CANON_UNIT', 'E_CANON_BLOB', 'E_BLOB_MISMATCH', 'E_ENVELOPE']) assert.ok(ERROR_CODES.includes(c), c);
 });
@@ -109,7 +109,8 @@ test('verify never throws for invalid receipts', () => {
 
 test('recompute argument errors are programmer errors', () => {
   assert.throws(() => verify(stored.input, keys, 5), TypeError);
-  assert.throws(() => verify(stored.input, keys, { descriptor: {} }), TypeError);
+  // Since spec-0.3.0 a recompute without `value` is valid: evaluation is unavailable (10.1 step 7.6).
+  for (const value of [null, 5, 'x', {}, { type: 'number' }, { type: 'number', value: 1 }]) assert.throws(() => verify(stored.input, keys, { descriptor: {}, value }), TypeError, JSON.stringify(value));
   assert.throws(() => verify(stored.input, keys, { value: { type: 'number', value: '1' }, inputs: [] }), TypeError);
 });
 

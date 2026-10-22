@@ -8,8 +8,8 @@ import { loadVectors } from './helpers.mjs';
 
 const vectors = loadVectors();
 
-test('the vector set is complete (339 vectors at spec-0.2.1, every kind)', () => {
-  assert.equal(vectors.length, 339);
+test('the vector set is complete (365 vectors at spec-0.3.0, every kind)', () => {
+  assert.equal(vectors.length, 365);
   const kinds = new Set(vectors.map((v) => v.kind));
   assert.deepEqual([...kinds].sort(), ['cell', 'envelope', 'function', 'jcs', 'keyid', 'keys', 'receipt', 'ref', 'scalar', 'unit', 'uri']);
 });

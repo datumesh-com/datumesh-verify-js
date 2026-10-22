@@ -201,10 +201,12 @@ test('the receipt answers the request (step 5): cell id, and asof when one was a
   assert.equal(env(200, ok, { cell_id: REQ.cell_id, asof: R.asof }).code, 'OK');
   assert.equal(env(200, ok, { cell_id: other, asof: R.asof }).code, 'E_ENVELOPE');
   assert.equal(env(200, ok, { cell_id: other }).code, 'E_ENVELOPE');
-  assert.equal(env(200, ok, { cell_id: REQ.cell_id, asof: '2024-03-16T09:00:00.000001Z' }).code, 'E_ENVELOPE');
+  // Since spec-0.3.0 (D31 revised): for ok as for stale, at or before the requested asof.
+  assert.equal(env(200, ok, { cell_id: REQ.cell_id, asof: '2024-03-16T09:00:00.000001Z' }).code, 'OK');
+  assert.equal(env(200, ok, { cell_id: REQ.cell_id, asof: '9999-12-31T23:59:59.999999Z' }).code, 'OK');
   const stale = { ...ok, outcome: 'stale', age_seconds: 5 };
   assert.equal(env(200, stale, { cell_id: other }).code, 'E_ENVELOPE');
-  // For stale, the receipt's asof is at or before the requested one (D31); for ok, equal.
+  // For stale, the receipt's asof is at or before the requested one (D31); for ok too.
   assert.equal(env(200, stale, { cell_id: REQ.cell_id, asof: R.asof }).code, 'OK');
   assert.equal(env(200, stale, { cell_id: REQ.cell_id, asof: '2024-03-16T09:00:00.000001Z' }).code, 'OK');
   assert.equal(env(200, stale, { cell_id: REQ.cell_id, asof: '9999-12-31T23:59:59.999999Z' }).code, 'OK');

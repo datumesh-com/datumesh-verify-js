@@ -16,7 +16,7 @@ export const OUTPUTS = {
   uri: ['object', 'canonical', 'sha256', 'https'],
   keyid: ['key_id'],
   keys: ['key_ids'],
-  receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked'], // blob_checked only with blob_hex
+  receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked', 'code'], // blob_checked only with blob_hex; code only with success at level signed and E_EVAL_UNAVAILABLE
   unit: ['unit'],
   envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
 };
@@ -58,10 +58,27 @@ export function inputOf(v) {
   return v.input_hex !== undefined ? hexToBytes(v.input_hex) : v.input;
 }
 
-/** env {"https": {"status": 200|<int>|"error", "body"?: text}} -> KeysResult */
+/**
+ * env {"https": {"status": 200|<int>|"error", "body"?: text}} -> KeysResult. "error" (a network
+ * failure) is null; any other status is passed as given, so a string "200" or a missing status
+ * reaches the library as such (SPEC 9.3, 11: only the integer 200 is a retrieved document).
+ */
 export function keysFromEnv(lib, host, env) {
   const h = (env && env.https) || { status: 'error' };
-  return lib.keysFromResponse(host, typeof h.status === 'number' ? h.status : null, h.body);
+  return lib.keysFromResponse(host, h.status === 'error' ? null : h.status, h.body);
+}
+
+/**
+ * A vector's `recompute` for the library. Section 11: `descriptor` is a JSON value, never text,
+ * and only an absent member means unavailable. The library takes a JS string as JSON text to
+ * parse, so the value is handed over as its JSON text: a string value stays a string value, and
+ * null stays null (both fail the hash check, 10.1 step 7.1).
+ */
+export function recomputeOf(v) {
+  if (v.recompute === undefined || v.recompute === null) return null;
+  const rc = { ...v.recompute };
+  if (Object.prototype.hasOwnProperty.call(rc, 'descriptor')) rc.descriptor = JSON.stringify(rc.descriptor);
+  return rc;
 }
 
 /** Keys for a receipt vector: one KeysResult per host in `keys` (absent hosts: no source). */
@@ -104,13 +121,15 @@ export function makeRunner(lib, sha256) {
         }
         case 'receipt': {
           const blob = v.blob_hex !== undefined ? hexToBytes(v.blob_hex) : null;
-          const res = lib.verify(inputOf(v), receiptKeys(lib, v), v.recompute ?? null, blob);
+          const res = lib.verify(inputOf(v), receiptKeys(lib, v), recomputeOf(v), blob);
           if (!res.ok) return { id: v.id, error: res.code };
           out.canonical = text(lib.receiptPayload(inputOf(v)));
           out.sha256 = res.hash;
           out.sig = JSON.parse(text(lib.canonicalize(inputOf(v), 'receipt'))).sig;
           out.level = res.level;
           if (blob !== null) out.blob_checked = res.blobChecked;
+          // The one code reported with success (10.1 step 7.6); absent otherwise.
+          if (res.code !== 'OK') out.code = res.code;
           break;
         }
         case 'unit': {
