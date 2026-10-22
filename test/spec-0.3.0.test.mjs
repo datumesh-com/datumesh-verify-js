@@ -38,8 +38,9 @@ test('D31 revised (5.5 step 5): for ok as for stale, the receipt asof is at or b
   const body = JSON.parse(v.input);
   const R = body.receipt;
   const at = (outcome, asof, extra = {}) => {
-    const b = { ...body, outcome, ...extra };
-    if (outcome === 'ok') delete b.age_seconds;
+    const b = { ...body, outcome };
+    delete b.age_seconds;
+    Object.assign(b, extra);
     const req = asof === undefined ? { cell_id: v.request.cell_id } : { cell_id: v.request.cell_id, asof };
     return checkEnvelope(200, JSON.stringify(b), ks, req);
   };

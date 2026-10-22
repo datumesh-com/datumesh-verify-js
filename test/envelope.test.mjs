@@ -15,7 +15,7 @@ const matches = (outcome, s) => (outcome === 'error' ? s >= 500 && s <= 599 : ST
 const OTHER = [100, 199, 200, 201, 204, 301, 302, 304, 400, 401, 402, 403, 404, 409, 429, 499, 500, 502, 503, 599, 600, 0, 999];
 
 test('there are envelope vectors for every outcome', () => {
-  assert.equal(envelopes.length, 50);
+  assert.equal(envelopes.length, 60);
   const outcomes = new Set(envelopes.filter((v) => v.valid).map((v) => v.outcome));
   assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'rate_limited', 'stale', 'unlicensed']);
 });
