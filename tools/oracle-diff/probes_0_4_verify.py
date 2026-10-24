@@ -178,3 +178,6 @@ add('s-new-also-in-receipt', ss(None, both_in_receipt))
 add('m-lineage-member-version', sm(lambda rc: rc.__setitem__('lineage', ['d904d683b133868682e1479769513047aed02fc2e0ce95ac8d98996ddcf9c33f'])))
 add('m-lineage-slice-prefix-only', sm(lambda rc: rc.__setitem__('lineage', [LIN[:71]])))
 add('m-lineage-slice-noprefix', sm(lambda rc: rc.__setitem__('lineage', [LIN[6:]])))
+# 18be70f: an item of the lineage that is not a string replaces nothing.
+add('s-lineage-nonstring-only', ss(lambda rc: rc.__setitem__('lineage', [1, None, {}])))
+add('s-lineage-nonstring-and-new', ss(lambda rc: rc.__setitem__('lineage', [1, NEW, TAX])))

@@ -5,7 +5,7 @@
 // vectors and receipt `keys` envs go through keysFromResponse; URIs map to mesh.example. Receipt
 // vectors' `recompute` (descriptor, inputs, and since spec-0.4.0 manifests and lineage) is handed
 // to verify. The formula-evaluator kinds (formula, formula-eval, excel, decimal) are not run: their
-// line is {"id", "error": null, "skipped": "<reason>"} (a verifier library has no evaluator).
+// line is exactly {"id", "error": null, "skipped": "<kind>"} (a verifier library has no evaluator).
 // Uses the ESM build (run `npm run build` first); DATUMESH_BUILD=cjs uses the CommonJS build.
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';

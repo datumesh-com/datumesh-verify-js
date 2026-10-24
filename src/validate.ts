@@ -391,8 +391,8 @@ const RANGE_TYPES: readonly string[] = ['date', 'instant', 'number', 'string'];
 
 /**
  * A version slice (SPEC 4.4) has exactly `cell`, `from` and `to`; any other object is checked as
- * a membership slice, a cell object with markers or ranges (the reference tool decides the same
- * way; DEFECTS.md 41).
+ * a membership slice, a cell object with markers or ranges (SPEC 4.4 "Which shape"; DEFECTS.md
+ * 41).
  */
 export function isVersionSlice(o: JsonObject): boolean {
   return sortedKeys(o).join(',') === 'cell,from,to';
@@ -419,7 +419,8 @@ function structSlice(v: JsonValue, path: string): void {
       const p = memberPath(ap, a);
       const x = args[a];
       if (x === SLICE) continue;
-      if (isObject(x) && !has(x, 'value')) {
+      // SPEC 4.4: exactly {hi, lo, type} is a range object; any other value is read as a typed scalar.
+      if (isObject(x) && sortedKeys(x).join(',') === 'hi,lo,type') {
         members(x, ['hi', 'lo', 'type'], [], p);
         for (const m of ['hi', 'lo', 'type']) expectString(x, m, p);
       } else structScalar(x, p);
@@ -460,7 +461,7 @@ function canonSlice(o: JsonObject, path: string): void {
       continue;
     }
     const a = x as JsonObject;
-    if (has(a, 'value')) {
+    if (sortedKeys(a).join(',') !== 'hi,lo,type') {
       canonScalar(a, p);
       continue;
     }

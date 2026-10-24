@@ -26,10 +26,10 @@ export const OUTPUTS = {
  * Vector kinds this runner does not run (CONTRACT-0.4.0-libs.md item 9; SPEC 11): `formula`,
  * `formula-eval`, `excel` and `decimal` are for formula evaluators, and a verifier library has
  * none (SPEC 10.1: evaluation comes from the resolver). For such a vector the runner writes
- * `{"id", "error": null, "skipped": "<reason>"}` and the conformance check counts it as skipped.
+ * exactly `{"id", "error": null, "skipped": "<kind>"}` (SPEC 11, crosscheck/README.md) and the
+ * conformance check counts it as skipped.
  */
 export const SKIPPED_KINDS = ['formula', 'formula-eval', 'excel', 'decimal'];
-export const SKIP_REASON = 'not run: a formula-evaluator vector kind; @datumesh/verify is a verifier library without a formula evaluator (SPEC 10.1, 11)';
 
 const canonicalJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
 
@@ -37,7 +37,7 @@ export function compare(v, got) {
   const problems = [];
   if (got.id !== v.id) problems.push(`id ${got.id}`);
   if (SKIPPED_KINDS.includes(v.kind)) {
-    if (got.error !== null || got.skipped !== SKIP_REASON) problems.push(`expected a skipped ${v.kind} vector, got ${JSON.stringify(got).slice(0, 200)}`);
+    if (Object.keys(got).sort().join() !== 'error,id,skipped' || got.error !== null || got.skipped !== v.kind) problems.push(`expected a skipped ${v.kind} vector, got ${JSON.stringify(got).slice(0, 200)}`);
     return problems;
   }
   if (!v.valid) {
@@ -103,7 +103,7 @@ export function receiptKeys(lib, v) {
 export function makeRunner(lib, sha256) {
   return async function run(v) {
     const out = { id: v.id, error: null };
-    if (SKIPPED_KINDS.includes(v.kind)) return { ...out, skipped: SKIP_REASON };
+    if (SKIPPED_KINDS.includes(v.kind)) return { ...out, skipped: v.kind };
     try {
       switch (v.kind) {
         case 'jcs':
@@ -170,7 +170,7 @@ export function makeRunner(lib, sha256) {
         case 'slice': {
           // The input is JSON text of a slice object (4.4) or a manifest (15.13). Parse it strictly
           // (6.1); an object with a `members` member is taken as a manifest, anything else as a
-          // slice object (the reference tool decides the same way, DEFECTS.md 41).
+          // slice object (SPEC 11; DEFECTS.md 41).
           const parsed = JSON.parse(text(lib.canonicalize(inputOf(v), 'jcs')));
           const manifest = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'members');
           const c = lib.canonicalize(inputOf(v), manifest ? 'manifest' : 'slice');

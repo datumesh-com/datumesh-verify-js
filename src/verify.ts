@@ -60,9 +60,9 @@ export interface Recompute {
   /**
    * Since spec-0.4.0: the `inputs` entries the evaluation read (its lineage), for the
    * supersession check of SPEC 10.1 step 7.6. Absent: no check is made, and a differing value is
-   * E_VALUE_MISMATCH.
+   * E_VALUE_MISMATCH. Items that are not strings replace nothing (SPEC 10.1 step 7.6).
    */
-  lineage?: readonly string[];
+  lineage?: readonly unknown[];
   /**
    * What evaluating the function produced: a typed scalar. Absent (undefined) when the function
    * could not be evaluated: once 7.1-7.5 pass, the result is success at level "signed" with code
@@ -295,9 +295,9 @@ function memberOf(slice: JsonObject, version: boolean, r: JsonObject): boolean {
  * hash. Lineage entries are not otherwise checked, and their manifests are not needed
  * (DEFECTS.md 38-39).
  */
-function superseded(entries: string[], lineage: readonly string[], single: Map<string, JsonObject>, supplied: Record<string, unknown>, sources: Sources): boolean {
+function superseded(entries: string[], lineage: readonly unknown[], single: Map<string, JsonObject>, supplied: Record<string, unknown>, sources: Sources): boolean {
   const mine = new Set(entries);
-  const read = new Set(lineage);
+  const read = new Set(lineage.filter((l): l is string => typeof l === 'string'));
   const fresh = [...read].filter((l) => !mine.has(l));
   const verified = new Map<string, JsonObject | null>();
   const receiptFor = (l: string): JsonObject | null => {
@@ -364,8 +364,10 @@ function checkRecomputeArg(rc: unknown): Recompute | null {
   if (r.manifests !== undefined && (typeof r.manifests !== 'object' || r.manifests === null || Array.isArray(r.manifests))) {
     throw new TypeError('recompute.manifests must be an object mapping slice entry to manifest JSON');
   }
-  if (r.lineage !== undefined && (!Array.isArray(r.lineage) || r.lineage.some((x) => typeof x !== 'string'))) {
-    throw new TypeError('recompute.lineage must be an array of inputs entries (strings), or absent');
+  // An item of the lineage that is not a string replaces nothing (10.1 step 7.6); only a lineage
+  // that is not an array at all is the caller's error.
+  if (r.lineage !== undefined && !Array.isArray(r.lineage)) {
+    throw new TypeError('recompute.lineage must be an array of inputs entries, or absent');
   }
   return r;
 }

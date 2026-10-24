@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.0` (status, entries 38-45), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -30,7 +30,7 @@ manifests (4.4, 15.13), step 7.5 for slice entries with `E_SLICE_MEMBER`, `E_INP
 limits. Worked from the diff of `SPEC.md`, `units.md`, `schemas/` and `vectors/` between
 `3bac3d4` and `dedd132`; `tools/*.py` (including `formula.py`, `fdecimal.py`, `gen_formula.py`),
 `tests/`, the `crosscheck/` scripts and `DESIGN-0.4.0.md` were not read. Where the text left a case
-open I ran `tools/canon.py check` as a black box over 177 probes (`tools/oracle-diff/probes_0_4.py`;
+open I ran `tools/canon.py check` as a black box over 177 probes (179 since `18be70f`) (`tools/oracle-diff/probes_0_4.py`;
 the verdicts are `test/fixtures/oracle-probes-0.4.0.jsonl.gz`, and the library agrees with every
 one of them, checked by `test/spec-0.4.0.test.mjs`).
 
@@ -49,7 +49,28 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
 | 5.5: `not_covered` `fault` | New, optional | accepted; `EnvelopeResult.fault` (null otherwise); an `error` envelope may carry the two new codes |
 | `units.md`: `min h d km deg`; 4.5: `extent`, `members` | New | regenerated `src/units-data.ts`; both limits |
 
-## 38. Gap: what "replaced in that lineage" means (10.1 step 7.6)
+## Status at spec `18be70f`
+
+Spec commit `18be70f` (on top of `dedd132`; no vector result and no hash changed) settles entries
+38-45 in the text, each as the reference tool already behaved and as the library already did,
+with two exceptions noted below. Their text is kept as written.
+
+| Entry | Settled by |
+|---|---|
+| 38 | 10.1 step 7.6: "`e` is replaced when the lineage does not list `e` and lists an entry `n` that `inputs` does not list, such that: for a receipt hash `e`: a receipt is offered for `n`, it is signature-valid through step 6, it hashes to `n`, it has the same cell id (4.4) as `e`'s receipt, and its `tx` is strictly later than that receipt's `tx`. Its `tx` is not compared with the receipt's `tx` or `asof` ..."; "The lineage is a set: its order does not matter." |
+| 39 | 10.1 step 7.6: "for a slice entry `e`: `n` is a string that begins `slice:` followed by `e`'s slice id and `:`. The slice id alone decides: no manifest is read, and the rest of `n` is not checked. An item of the lineage that is not a string replaces nothing, and lineage items are not otherwise validated." **Library change:** a non-string lineage item was a `TypeError`; it is now ignored (only a lineage that is not an array is still a `TypeError`). |
+| 40 | 4.4 "Which shape": "an object whose members are exactly `hi`, `lo` and `type` is a range object, and any other value is read as a typed scalar"; "Check order": "Within a range object, `type` comes first ..., then `hi`, then `lo`". **Library change:** an argument object was a range when it had no `value`; it is now a range exactly when its members are `hi`, `lo`, `type`. Every such malformed object is `E_SCHEMA` either way, so no code changes (only the detail and path of those `E_SCHEMA` failures). |
+| 41 | 4.4 "Which shape": "An object whose members are exactly `cell`, `from` and `to` is a version slice; any other slice object is read as a cell object"; 11 (`slice`): "It is a manifest exactly when it is an object with a `members` member". |
+| 42 | 4.4 "Empty is not an error": "a version slice with `from` after `to`" is empty; "Check order": "Last, a slice object with no open or ranged argument is `E_SLICE`"; a version slice's "`cell` is checked whole, as a cell (its own name limit included), then for slice markers (`E_SLICE`), then `from` and `to`". |
+| 43 | 7: "A function with no arguments may have `"order": []`"; an `order` entry "that is not a declared argument (whatever its form: `"Date"` and `""` too) is `E_CANON_SET`"; an extent "may be empty"; range ends "each in the type's lexical form (for a number, 3.1's form and then its 128-character limit) and, for a number, an integer (`E_CANON_NUMBER`)"; strings ordered "by code point, not by UTF-16 code unit". |
+| 44 | 11: "where a schema keyword (`uniqueItems`, `maxItems`, a pattern) would reject an input that this document assigns another code, this document governs"; the keywords are removed from the schemas. |
+| 45 | The schemas' control characters are `\u` escapes again, and the spec's tests now check for raw control characters (14, spec-0.4.0). Checked: no raw C0/C1 character in `schemas/` at `18be70f`. |
+
+Also settled at `18be70f`: a cross-check runner's line for a kind it does not implement is exactly
+`{"id": ..., "error": null, "skipped": "<kind>"}` (11, `crosscheck/README.md`). The runner
+printed a sentence as the value; it now prints the kind.
+
+## 38. Gap: what "replaced in that lineage" means (10.1 step 7.6) [resolved at 18be70f]
 
 - **Problem.** 7.6 says the verifier "checks whether an entry of the receipt's `inputs` was
   replaced in that lineage by a receipt of the same cell with a later `tx` (signature-valid
@@ -71,7 +92,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   hashes to the entry, has the cell id of `e`'s receipt and a later `tx`; for a slice entry, by an
   entry with the same slice id."
 
-## 39. Gap: lineage entries' form, and the manifests 7.6 mentions (10.1 step 7.6, 11)
+## 39. Gap: lineage entries' form, and the manifests 7.6 mentions (10.1 step 7.6, 11) [resolved at 18be70f]
 
 - **Problem.** 7.6 says the lineage is "the `inputs` entries the evaluation read, with the
   receipts and manifests of those not listed", but the slice rule compares slice ids only, so a
@@ -87,7 +108,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   lineage entry is not otherwise checked." (or require `inputEntry` form and say which code a
   malformed one gives).
 
-## 40. Gap: check order inside a range object, and range object vs typed scalar (4.2, 4.4)
+## 40. Gap: check order inside a range object, and range object vs typed scalar (4.2, 4.4) [resolved at 18be70f]
 
 - **Problem.** 4.4 says a slice object "is checked in JCS order like a cell". In JCS order a range
   object's members are `hi`, `lo`, `type`, but the ends cannot be checked before their type. It
@@ -103,7 +124,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   in that order. An argument object with a `value` member is a typed scalar; any other is a range
   object."
 
-## 41. Gap: which shape a slice object is checked as (4.4, 11)
+## 41. Gap: which shape a slice object is checked as (4.4, 11) [resolved at 18be70f]
 
 - **Problem.** A slice object is a cell object with markers or ranges, or a version slice
   `{"cell", "from", "to"}`. For a malformed object (`{"cell", "from"}`, `{"args", ..., "from"}`,
@@ -119,7 +140,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   a version slice; any other slice object is checked as a cell object. A `slice` vector's input
   is a manifest when it has a `members` member."
 
-## 42. Gap: version slices with `from` after `to`; where `E_SLICE` is checked (4.4)
+## 42. Gap: version slices with `from` after `to`; where `E_SLICE` is checked (4.4) [resolved at 18be70f]
 
 - **Problem.** 4.4 says a range with `lo` after `hi` is empty, not an error, but says nothing of
   a version slice whose `from` is after `to`. It says a slice object without an open or ranged
@@ -135,7 +156,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   and its name length; for a version slice, its cell is checked as a cell, then for markers
   (`E_SLICE`), then `from` and `to`."
 
-## 43. Underspecified: extent and order edge cases (7)
+## 43. Underspecified: extent and order edge cases (7) [resolved at 18be70f]
 
 - **Problem.** 7 does not say whether an empty extent (`[]`) or an empty `order` (for a function
   with no arguments) is allowed, whether a non-integer number range end of more than 128
@@ -151,7 +172,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
 - **Proposed wording (7).** "An extent may be empty. A range end is checked as a number (3.1),
   then as an integer."
 
-## 44. Editorial: the schemas give other codes than the prose for `order` and `extent` (schemas)
+## 44. Editorial: the schemas give other codes than the prose for `order` and `extent` (schemas) [resolved at 18be70f]
 
 - **Problem.** `schemas/function.schema.json` gives `order` `uniqueItems`, `maxItems: 32` and
   `items: argName`, and an extent array `uniqueItems` and `maxItems: 4096`; a schema validator
@@ -160,7 +181,7 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
   follows the prose, and so does the library.
 - **Proposed fix.** Drop those keywords from the schema, or note that the prose decides the code.
 
-## 45. Editorial: raw control characters are back in the schemas (`schemas/defs.schema.json`, `schemas/function.schema.json`)
+## 45. Editorial: raw control characters are back in the schemas (`schemas/defs.schema.json`, `schemas/function.schema.json`) [resolved at 18be70f]
 
 - **Problem.** Entry 31 (resolved at `2a77580`): at `3bac3d4` the string patterns were escaped
   (`\u007f-\u009f`). At `dedd132` both files again contain the raw characters U+007F and U+009F
