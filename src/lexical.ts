@@ -17,6 +17,8 @@ export const LIMITS = {
   licence_spdx: 64,
   licence_url: 512,
   keys: 64,
+  extent: 4096,
+  members: 1048576,
 } as const;
 
 export const TYPES = ['blob', 'boolean', 'date', 'instant', 'number', 'string'] as const;
@@ -75,6 +77,69 @@ export function isHex(s: string, digits: number): boolean {
 
 export function checkHex(s: string, digits: number, path: string): void {
   if (!isHex(s, digits)) fail('E_CANON_HEX', `expected ${digits} lowercase hex digits`, path);
+}
+
+const SLICE_ENTRY_RE = /^slice:[0-9a-f]{64}:[0-9a-f]{64}$/;
+
+/** SPEC 8.1, 15.13: a slice entry `slice:<slice id>:<members hash>` (135 characters). */
+export function isSliceEntry(s: string): boolean {
+  return SLICE_ENTRY_RE.test(s);
+}
+
+/**
+ * SPEC 10.1 step 3 (since spec-0.4.0): an `inputs` entry is a receipt hash (64 lowercase hex
+ * digits) or a slice entry; anything else is E_CANON_HEX.
+ */
+export function checkInputEntry(s: string, path: string): void {
+  if (!isHex(s, 64) && !isSliceEntry(s)) fail('E_CANON_HEX', 'an inputs entry is a receipt hash (64 lowercase hex digits) or a slice entry slice:<64 hex>:<64 hex>', path);
+}
+
+/**
+ * Numeric order of two canonical numbers (SPEC 3.1): negative, zero or positive like a
+ * comparator. Exact: compares the decimal strings, never doubles.
+ */
+export function compareNumbers(a: string, b: string): number {
+  const na = a.startsWith('-');
+  const nb = b.startsWith('-');
+  if (na !== nb) return na ? -1 : 1;
+  const m = compareMagnitudes(na ? a.slice(1) : a, nb ? b.slice(1) : b);
+  return na ? -m : m;
+}
+
+function compareMagnitudes(a: string, b: string): number {
+  const [ai, af = ''] = a.split('.');
+  const [bi, bf = ''] = b.split('.');
+  if (ai.length !== bi.length) return ai.length < bi.length ? -1 : 1;
+  if (ai !== bi) return ai < bi ? -1 : 1;
+  const n = Math.max(af.length, bf.length);
+  const x = af.padEnd(n, '0');
+  const y = bf.padEnd(n, '0');
+  return x === y ? 0 : x < y ? -1 : 1;
+}
+
+/** Code point order of two strings (JavaScript's own `<` compares UTF-16 code units). */
+export function compareCodePoints(a: string, b: string): number {
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    const x = a.codePointAt(i) as number;
+    const y = b.codePointAt(j) as number;
+    if (x !== y) return x < y ? -1 : 1;
+    i += x > 0xffff ? 2 : 1;
+    j += y > 0xffff ? 2 : 1;
+  }
+  return i < a.length ? 1 : j < b.length ? -1 : 0;
+}
+
+/**
+ * The order of a type's lexical values (SPEC 7 extents, 15.13 ranges and member order): numbers
+ * numerically, dates and instants chronologically (their canonical forms are fixed width, so
+ * string order is time order), strings by code point. Both values must be canonical.
+ */
+export function compareValues(type: string, a: string, b: string): number {
+  if (type === 'number') return compareNumbers(a, b);
+  if (type === 'string') return compareCodePoints(a, b);
+  return a === b ? 0 : a < b ? -1 : 1;
 }
 
 /** SPEC 9.1: `<host>#<key id>`. Host failures are E_CANON_NAME, key id failures E_CANON_HEX. */

@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.0` (status, entries 38-45), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -21,6 +21,156 @@ exists but its exact form had to be inferred).
 
 ---
 
+# spec-0.4.0
+
+`spec-0.4.0` (spec commit `dedd132`, 978 vectors) adds the formula dialect and slice-as-lineage.
+For a verifier library it adds slice entries in `inputs` (10.1 step 3), slice objects and
+manifests (4.4, 15.13), step 7.5 for slice entries with `E_SLICE_MEMBER`, `E_INPUT_SUPERSEDED`
+(7.6), `signature.order` and argument `extent` (7), the envelope `fault` (5.5), five units and two
+limits. Worked from the diff of `SPEC.md`, `units.md`, `schemas/` and `vectors/` between
+`3bac3d4` and `dedd132`; `tools/*.py` (including `formula.py`, `fdecimal.py`, `gen_formula.py`),
+`tests/`, the `crosscheck/` scripts and `DESIGN-0.4.0.md` were not read. Where the text left a case
+open I ran `tools/canon.py check` as a black box over 177 probes (`tools/oracle-diff/probes_0_4.py`;
+the verdicts are `test/fixtures/oracle-probes-0.4.0.jsonl.gz`, and the library agrees with every
+one of them, checked by `test/spec-0.4.0.test.mjs`).
+
+The 546 vectors of the kinds `formula`, `formula-eval`, `excel` and `decimal` are for formula
+evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips them and says so.
+
+| Entry / change | Status at `dedd132` | Library change |
+|---|---|---|
+| 36 (descriptor as a JS string) | Resolved (10.1 step 7.1: "An implementation whose interface also takes text in place of a parsed value says which it takes; text is then the obtained bytes.") | none: `Recompute.descriptor` documents that a JS string is JSON text |
+| 37 (env `status` `200.0`) | Resolved (11: "In an `env`, `status` is an integer HTTP status written without fraction or exponent, or the string `"error"`.") | none |
+| Slice entries (8.1, 10.1 step 3) | New | `inputs` entries are a receipt hash or `slice:<64 hex>:<64 hex>`, else `E_CANON_HEX`; ascending by string order, so hashes sort before slice entries; one entry each for the 4,096 limit |
+| Slice objects, manifests (4.2, 4.4, 15.13) | New | `canonicalize(x, "slice" \| "manifest")`; `sliceId`, `membersHash`, `sliceEntry`; inference: `members` is a manifest, `from`/`to` a version slice |
+| 10.1 step 7.5 for slice entries | New, `E_SLICE_MEMBER` | `Recompute.manifests` (by entry; text, bytes or parsed); members are obtained from `Recompute.inputs`; the `tx` rule runs over single inputs and members together |
+| 10.1 step 7.6, `E_INPUT_SUPERSEDED` | New | `Recompute.lineage`; success at level `signed` with code `E_INPUT_SUPERSEDED`, path `$.inputs`; step 7.7 after it as after `E_EVAL_UNAVAILABLE` |
+| 7: `signature.order`, `extent` | New, optional | accepted with their checks and check order |
+| 5.5: `not_covered` `fault` | New, optional | accepted; `EnvelopeResult.fault` (null otherwise); an `error` envelope may carry the two new codes |
+| `units.md`: `min h d km deg`; 4.5: `extent`, `members` | New | regenerated `src/units-data.ts`; both limits |
+
+## 38. Gap: what "replaced in that lineage" means (10.1 step 7.6)
+
+- **Problem.** 7.6 says the verifier "checks whether an entry of the receipt's `inputs` was
+  replaced in that lineage by a receipt of the same cell with a later `tx` (signature-valid
+  through step 6), or by an entry for the same slice id with another members hash". It does not
+  say whether the replaced entry may still be in the lineage, whether the replacement may also be
+  in the receipt's `inputs`, what "the same cell" compares, whether the replacement must hash to
+  its entry, or whether its `asof`/`tx` are bounded by the receipt's.
+- **Resolution (the reference tool, probed).** An entry `e` of `inputs` is replaced when `e` is
+  not in the lineage and some lineage entry `l` that is not in `inputs` is: for a receipt hash, a
+  receipt obtained from `recompute.inputs` that verifies through step 6, hashes to `l`, has the
+  same cell id as `e`'s receipt and a strictly later `tx` (no bound by the receipt's `asof` or
+  `tx`); for a slice entry, an entry with the same slice id. The lineage's order does not matter.
+  A lineage that lists `e` as well as a later version, or a later version that the receipt also
+  lists, is `E_VALUE_MISMATCH`. A later version of a slice member listed in the lineage as a
+  receipt hash does not supersede the slice entry (only an entry for the same slice id does).
+- **Proposed wording (7.6).** "... the verifier checks whether an entry `e` of the receipt's
+  `inputs` that the lineage does not list was replaced by a lineage entry that `inputs` does not
+  list: for a receipt hash, by the receipt offered for that entry, if it verifies through step 6,
+  hashes to the entry, has the cell id of `e`'s receipt and a later `tx`; for a slice entry, by an
+  entry with the same slice id."
+
+## 39. Gap: lineage entries' form, and the manifests 7.6 mentions (10.1 step 7.6, 11)
+
+- **Problem.** 7.6 says the lineage is "the `inputs` entries the evaluation read, with the
+  receipts and manifests of those not listed", but the slice rule compares slice ids only, so a
+  manifest for a lineage slice entry is never needed; and nothing says whether lineage entries
+  are checked for form (`schemas/vector.schema.json` requires `inputEntry`).
+- **Resolution (the reference tool, probed).** Lineage entries are not validated: a slice entry
+  whose members hash is not lowercase hex (or empty), with a matching `slice:<slice id>:` prefix,
+  still counts as another members hash; a missing or malformed manifest for it does not matter.
+  The library does the same (a match on the prefix `slice:<slice id>:`; any other string is a
+  receipt hash that is unavailable unless offered). Malformed lineage is a resolver's bug, and
+  only decides between two codes for a value that already differs.
+- **Proposed wording.** "Lineage entries need no manifest: only their slice ids are compared. A
+  lineage entry is not otherwise checked." (or require `inputEntry` form and say which code a
+  malformed one gives).
+
+## 40. Gap: check order inside a range object, and range object vs typed scalar (4.2, 4.4)
+
+- **Problem.** 4.4 says a slice object "is checked in JCS order like a cell". In JCS order a range
+  object's members are `hi`, `lo`, `type`, but the ends cannot be checked before their type. It
+  also does not say how an argument object is told to be a typed scalar or a range object when
+  it is malformed (`{"type", "value", "lo"}`, `{"type", "step", "lo", "hi"}`).
+- **Resolution (the reference tool, probed).** Structure: an argument object with `value` is a
+  typed scalar (`{"type", "value", "lo"}` is `E_SCHEMA`, unexpected `lo`), any other object a
+  range object with exactly `hi`, `lo`, `type`, all strings (`E_SCHEMA`). Canonical form: `type`
+  first (unknown, `boolean` or `blob`: `E_CANON_TYPE`), then `hi`, then `lo` in the type's lexical
+  form (`hi` = 129 digits and `lo` = `01` gives `E_CANON_LIMIT` at `hi`). No order between the
+  ends is required (`lo` after `hi` is empty, as 4.4 says).
+- **Proposed wording (4.4).** "Within a range object, `type` is checked first, then `hi` and `lo`
+  in that order. An argument object with a `value` member is a typed scalar; any other is a range
+  object."
+
+## 41. Gap: which shape a slice object is checked as (4.4, 11)
+
+- **Problem.** A slice object is a cell object with markers or ranges, or a version slice
+  `{"cell", "from", "to"}`. For a malformed object (`{"cell", "from"}`, `{"args", ..., "from"}`,
+  `{"cell", "from", "to", "x"}`) the `E_SCHEMA` detail and path depend on which shape is assumed;
+  the `slice` vector kind likewise holds "a slice object or a manifest" without saying how a
+  runner tells them apart.
+- **Resolution (the reference tool, probed).** An object whose members are exactly `cell`,
+  `from` and `to` is a version slice; any other is checked as a cell-shaped slice (so
+  `{"cell", "from"}` is `E_SCHEMA`, missing `args`). In a `slice` vector, an input with a
+  `members` member is a manifest, any other a slice object (`{"slice": ...}` is `E_SCHEMA` as a
+  slice object). Only the code is compared, and it is `E_SCHEMA` either way.
+- **Proposed wording (4.4, 11).** "An object with exactly the members `cell`, `from` and `to` is
+  a version slice; any other slice object is checked as a cell object. A `slice` vector's input
+  is a manifest when it has a `members` member."
+
+## 42. Gap: version slices with `from` after `to`; where `E_SLICE` is checked (4.4)
+
+- **Problem.** 4.4 says a range with `lo` after `hi` is empty, not an error, but says nothing of
+  a version slice whose `from` is after `to`. It says a slice object without an open or ranged
+  argument is `E_SLICE`, but not when that is checked relative to the other members, and that a
+  version slice's cell has no markers, but not when.
+- **Resolution (the reference tool, probed).** `from` after `to` is accepted (an empty slice).
+  For a cell-shaped slice, `E_SLICE` comes after all canonical checks of its members and after
+  the `function_name` limit (a bad `ns` or 513-character name wins over `E_SLICE`). For a
+  version slice, markers in its cell are `E_SLICE` right after the cell's own canonical checks
+  (including its name limit) and before `from` and `to`.
+- **Proposed wording (4.4).** "A version slice with `from` after `to` is empty, not an error.
+  `E_SLICE` for a slice object without an open or ranged argument is checked after its members
+  and its name length; for a version slice, its cell is checked as a cell, then for markers
+  (`E_SLICE`), then `from` and `to`."
+
+## 43. Underspecified: extent and order edge cases (7)
+
+- **Problem.** 7 does not say whether an empty extent (`[]`) or an empty `order` (for a function
+  with no arguments) is allowed, whether a non-integer number range end of more than 128
+  characters is `E_CANON_NUMBER` or `E_CANON_LIMIT`, or the code for `order` entries that are not
+  argument names (`"Date"`).
+- **Resolution (the reference tool, probed).** `[]` and `"order": []` with no arguments are
+  accepted. A range end is first a number by 3.1 (`E_CANON_NUMBER`, then the 128-character
+  `E_CANON_LIMIT`), then an integer (`E_CANON_NUMBER`); `hi` before `lo`; then `lo <= hi`
+  (`E_CANON_SET`). An `order` entry that is not a declared argument is `E_CANON_SET`, whatever
+  its form. A number extent is ordered numerically (`-10 < -9 < -1.5 < 0 < 0.25`); string extents
+  and ranges by code point, as 7 says (the range `[a..U+FFFD]` does not contain U+10000, probed;
+  JavaScript's `<` compares UTF-16 code units and would say it does).
+- **Proposed wording (7).** "An extent may be empty. A range end is checked as a number (3.1),
+  then as an integer."
+
+## 44. Editorial: the schemas give other codes than the prose for `order` and `extent` (schemas)
+
+- **Problem.** `schemas/function.schema.json` gives `order` `uniqueItems`, `maxItems: 32` and
+  `items: argName`, and an extent array `uniqueItems` and `maxItems: 4096`; a schema validator
+  rejects those cases as schema errors, while 7 assigns `E_CANON_SET` (a repeated or unknown
+  name, a repeated extent value) and `E_CANON_LIMIT` (4097 extent values). The reference tool
+  follows the prose, and so does the library.
+- **Proposed fix.** Drop those keywords from the schema, or note that the prose decides the code.
+
+## 45. Editorial: raw control characters are back in the schemas (`schemas/defs.schema.json`, `schemas/function.schema.json`)
+
+- **Problem.** Entry 31 (resolved at `2a77580`): at `3bac3d4` the string patterns were escaped
+  (`\u007f-\u009f`). At `dedd132` both files again contain the raw characters U+007F and U+009F
+  in `"^[^\u0000-\u001f<U+007F>-<U+009F>]*$"` (`git diff` shows `"^[^\u0000-\u001f-]*$"`).
+  Equivalent JSON, invisible to a reader.
+- **Resolution.** None needed; the library does not use the schemas at run time.
+- **Proposed fix.** Serialise the schemas with `ensure_ascii=True`.
+
+---
+
 # spec-0.3.0
 
 `spec-0.3.0` (spec commit `3bac3d4`, 365 vectors) makes two time rules more permissive (D17,
@@ -37,7 +187,7 @@ from the diff of `SPEC.md`, `units.md`, `schemas/` and `vectors/` between `710da
 | D35 (10.1 step 7.1) | `null` is a descriptor offered | `recompute.descriptor: null` is now `E_FN_HASH_MISMATCH` (was `E_FN_UNAVAILABLE`); only `undefined` (or no member) is unavailable |
 | 9.3 / 11 (integer 200) | Only the integer 200 is a retrieved document | none in behaviour (any `status !== 200` was already `E_KEY_UNAVAILABLE`); `keysFromResponse`'s `status` parameter is typed `unknown` and a non-number gets its own detail. The runner now passes an env's status as given, so `"200"` and a missing status reach the library. |
 
-## 36. Library note: a descriptor given as a JS string is JSON text (10.1 step 7.1, 11)
+## 36. Library note: a descriptor given as a JS string is JSON text (10.1 step 7.1, 11) [resolved in spec-0.4.0]
 
 - **Observation.** 10.1 step 7.1 says what is obtained is a JSON value, and bytes are parsed
   strictly first. This library has always taken `recompute.descriptor` as a parsed value, JSON
@@ -49,7 +199,7 @@ from the diff of `SPEC.md`, `units.md`, `schemas/` and `vectors/` between `710da
   either way.
 - **No spec change proposed.**
 
-## 37. Gap (minor): an env `status` of `200.0` (9.3, 11)
+## 37. Gap (minor): an env `status` of `200.0` (9.3, 11) [resolved in spec-0.4.0]
 
 - **Problem.** 9.3 and 11 now say only "the integer 200" is a retrieved document. In a vector
   `env`, the status is a JSON number; JavaScript (like any parser reading numbers as doubles)

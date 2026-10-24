@@ -18,6 +18,10 @@ export interface EnvelopeRequest {
 }
 export type Trust = 'primary' | 'verified' | 'unverified';
 
+/** SPEC 5.5, 15.11 (since spec-0.4.0): the formula evaluation faults a `not_covered` envelope may carry. */
+export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE';
+export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE'];
+
 export interface EnvelopeResult {
   /** True when the envelope is well formed, matches the status, and its receipt (if any) is signature-valid. */
   ok: boolean;
@@ -33,13 +37,19 @@ export interface EnvelopeResult {
   detail: string;
   /** Where the failure was found (a JSON path such as `$.quote.amount`), or null. */
   path: string | null;
+  /**
+   * Since spec-0.4.0: the formula evaluation fault of a `not_covered` envelope when ok and it
+   * carries one (the cell is a computed cell whose evaluation faulted: it has no value,
+   * deterministically, and this is not missing data), else null.
+   */
+  fault: Fault | null;
 }
 
 /** SPEC 5.5: required and optional members per outcome (besides `outcome`). */
 const MEMBERS: Record<Outcome, { required: string[]; optional: string[] }> = {
   ok: { required: ['receipt', 'trust'], optional: ['superseded_by', 'reason'] },
   stale: { required: ['receipt', 'trust', 'age_seconds'], optional: ['superseded_by', 'reason'] },
-  not_covered: { required: [], optional: [] },
+  not_covered: { required: [], optional: ['fault'] },
   unlicensed: { required: [], optional: [] },
   payment_required: { required: ['quote'], optional: [] },
   rate_limited: { required: ['retry_after_seconds'], optional: [] },
@@ -134,6 +144,9 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
           bad('error is a code from SPEC.md 10.2 other than E_ENVELOPE', p);
         }
         break;
+      case 'fault':
+        if (typeof v !== 'string' || !(FAULTS as readonly string[]).includes(v)) bad(`fault is one of the formula evaluation faults ${FAULTS.join(', ')} (SPEC 5.5)`, p);
+        break;
       case 'quote':
         quote(v, p);
         break;
@@ -188,7 +201,7 @@ export function checkEnvelope(status: number, body: unknown, keys: unknown, requ
   if (typeof status !== 'number' || !Number.isInteger(status)) throw new TypeError('status must be the HTTP status as an integer');
   checkRequest(request);
   const sources = collectSources(keys);
-  const fail = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path });
+  const fail = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null });
   let o: JsonValue;
   const numbers = new Map<string, string>();
   try {
@@ -206,7 +219,10 @@ export function checkEnvelope(status: number, body: unknown, keys: unknown, requ
     throw e;
   }
   const env = o as JsonObject;
-  if (!has(env, 'receipt')) return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: `outcome ${outcome}`, path: null };
+  if (!has(env, 'receipt')) {
+    const fault = has(env, 'fault') ? (env.fault as Fault) : null;
+    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: fault ? `outcome ${outcome}, fault ${fault}` : `outcome ${outcome}`, path: null, fault };
+  }
   // Step 4.
   let r: { receipt: JsonObject; hash: string };
   try {
@@ -232,5 +248,5 @@ export function checkEnvelope(status: number, body: unknown, keys: unknown, requ
     return fail('E_ENVELOPE', primary ? 'the receipt is primary (signed by its namespace host, no inputs): trust must be primary' : 'trust primary needs a receipt signed by the host of cell.ns with no inputs', '$.trust', r.hash);
   }
   if (env.superseded_by === r.hash) return fail('E_ENVELOPE', 'superseded_by is the receipt itself', '$.superseded_by', r.hash);
-  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null };
+  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null };
 }

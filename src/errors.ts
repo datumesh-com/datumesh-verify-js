@@ -1,9 +1,10 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.3.0';
+export const SPEC_VERSION = 'spec-0.4.0';
 
 /**
- * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` is
- * the one code that is not a failure: `verify` reports it with success (10.1 step 7.6).
+ * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` and
+ * `E_INPUT_SUPERSEDED` are not failures: `verify` reports them with success at level "signed"
+ * (10.1 step 7.6).
  */
 export const ERROR_CODES = [
   'E_PARSE_JSON',
@@ -44,8 +45,10 @@ export const ERROR_CODES = [
   'E_INPUT_UNAVAILABLE',
   'E_INPUT_INVALID',
   'E_INPUT_UNDECLARED',
+  'E_SLICE_MEMBER',
   'E_VALUE_MISMATCH',
   'E_EVAL_UNAVAILABLE',
+  'E_INPUT_SUPERSEDED',
   'E_BLOB_MISMATCH',
   'E_ENVELOPE',
 ] as const;

@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.3.0).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.4.0).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -9,18 +9,18 @@ import { sha256Hex, keyIdOf, fromHex } from './hash.js';
 import { newObject, toJson, type JsonObject, type JsonValue } from './json.js';
 import { jcsBytes } from './jcs.js';
 import { isHex } from './lexical.js';
-import { KINDS, cellUnit, inferKind, validate, type Kind } from './validate.js';
+import { KINDS, cellUnit, inferKind, validate, validateMembers, type Kind } from './validate.js';
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
 export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { checkEnvelope, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust } from './envelope.js';
+export { checkEnvelope, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault } from './envelope.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
 export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);
@@ -32,8 +32,11 @@ function parseAndValidate(input: unknown, kind: Kind | undefined | null): { valu
 
 /**
  * Validate `input` as `kind` and return its RFC 8785 canonical bytes. `input` is JSON text,
- * UTF-8 bytes, or an already-parsed value. `kind` is "scalar", "cell", "ref", "function" or
- * "receipt" (inferred from the members when omitted), or "jcs" for plain RFC 8785 with only the
+ * UTF-8 bytes, or an already-parsed value. `kind` is "scalar", "cell", "ref", "function",
+ * "receipt", or since spec-0.4.0 "slice" (a slice object, SPEC 4.4: a cell object with open or
+ * ranged arguments, or a version slice) or "manifest" (`{"members", "slice"}`, SPEC 15.13);
+ * inferred from the members when omitted (pass "slice" for a slice object with markers or
+ * ranges); or "jcs" for plain RFC 8785 with only the
  * strict-parsing rules of SPEC 6.1. A receipt is returned whole, `sig` included, and is checked
  * through SPEC 10.1 step 4. Throws DatumeshError.
  */
@@ -49,6 +52,34 @@ export function cellHash(cell: unknown): string {
 /** Function hash (SPEC 7): SHA-256 of the descriptor's canonical bytes. Throws DatumeshError. */
 export function functionHash(descriptor: unknown): string {
   return sha256Hex(jcsBytes(parseAndValidate(descriptor, 'function').value));
+}
+
+/**
+ * Slice id (SPEC 4.4, 15.13): SHA-256 of the slice object's canonical bytes. For an unbounded
+ * slice it is the cell id of the cell object with its markers. Throws DatumeshError.
+ */
+export function sliceId(slice: unknown): string {
+  return sha256Hex(jcsBytes(parseAndValidate(slice, 'slice').value));
+}
+
+/**
+ * Members hash (SPEC 15.13): SHA-256 of the canonical bytes of the JSON array of member receipt
+ * hashes, which must be 64 lowercase hex digits each, strictly ascending, at most 1,048,576. For
+ * an empty slice it is the hash of `[]`. Throws DatumeshError.
+ */
+export function membersHash(members: unknown): string {
+  const v = toJson(members);
+  validateMembers(v);
+  return sha256Hex(jcsBytes(v));
+}
+
+/**
+ * The `inputs` entry of a slice read (SPEC 8.1, 15.13): `slice:<slice id>:<members hash>`, from
+ * its manifest `{"members", "slice"}` (JSON text, bytes or a parsed object). Throws DatumeshError.
+ */
+export function sliceEntry(manifest: unknown): string {
+  const m = parseAndValidate(manifest, 'manifest').value as JsonObject;
+  return `slice:${sha256Hex(jcsBytes(m.slice))}:${sha256Hex(jcsBytes(m.members))}`;
 }
 
 /** Receipt hash (SPEC 8.3): SHA-256 of the canonical receipt without `sig`. Throws DatumeshError. */
