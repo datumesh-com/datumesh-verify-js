@@ -24,6 +24,20 @@ test('the vector set is complete (978 vectors at spec-0.4.0: 432 for verifier li
   assert.equal(vectors.filter((v) => v.kind === 'receipt' && /^(receipt\/slice-|invalid\/receipt-slice-)/.test(v.id)).length, 30); // not invalid/receipt-slice (spec-0.1.1)
 });
 
+test('a skipped vector\'s line is exactly {"id", "error": null, "skipped": "<kind>"} (SPEC 11, crosscheck/README.md)', () => {
+  const results = runAll({ DATUMESH_BUILD: 'esm' });
+  const kinds = new Set();
+  for (const { v, got } of results) {
+    if (!SKIPPED_KINDS.includes(v.kind)) {
+      assert.equal(Object.prototype.hasOwnProperty.call(got, 'skipped'), false, v.id);
+      continue;
+    }
+    assert.deepEqual(got, { id: v.id, error: null, skipped: v.kind }, v.id);
+    kinds.add(v.kind);
+  }
+  assert.deepEqual([...kinds].sort(), ['decimal', 'excel', 'formula', 'formula-eval']);
+});
+
 for (const build of ['esm', 'cjs']) {
   test(`conformance via tools/run-vectors.mjs (${build} build)`, async (t) => {
     const results = runAll({ DATUMESH_BUILD: build });

@@ -193,10 +193,12 @@ test('10.1 step 7.6: E_INPUT_SUPERSEDED is success at level signed at $.inputs, 
     // Step 7.7 after it as after E_EVAL_UNAVAILABLE: content for a non-blob value is E_SCHEMA.
     assert.equal(verify(v.input, ks, v.recompute, new Uint8Array(1)).code, 'E_SCHEMA', id);
   }
-  // Lineage must be an array of strings; manifests an object (programmer errors).
+  // Lineage must be an array, manifests an object (programmer errors). An item of the lineage
+  // that is not a string replaces nothing (10.1 step 7.6 at 18be70f).
   const v = vector('receipt/slice-superseded');
   assert.throws(() => verify(v.input, keysOf(v), { ...v.recompute, lineage: 'x' }), TypeError);
-  assert.throws(() => verify(v.input, keysOf(v), { ...v.recompute, lineage: [1] }), TypeError);
+  assert.equal(verify(v.input, keysOf(v), { ...v.recompute, lineage: [1, null, {}, ['x']] }).code, 'E_VALUE_MISMATCH');
+  assert.equal(verify(v.input, keysOf(v), { ...v.recompute, lineage: [1, ...v.recompute.lineage, null] }).code, 'E_INPUT_SUPERSEDED');
   assert.throws(() => verify(v.input, keysOf(v), { ...v.recompute, manifests: [] }), TypeError);
 });
 
