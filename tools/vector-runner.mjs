@@ -16,16 +16,30 @@ export const OUTPUTS = {
   uri: ['object', 'canonical', 'sha256', 'https'],
   keyid: ['key_id'],
   keys: ['key_ids'],
-  receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked', 'code'], // blob_checked only with blob_hex; code only with success at level signed and E_EVAL_UNAVAILABLE
+  receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked', 'code'], // blob_checked only with blob_hex; code only with success at level signed (E_EVAL_UNAVAILABLE or E_INPUT_SUPERSEDED)
   unit: ['unit'],
   envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
+  slice: ['canonical', 'sha256', 'slice_id', 'members_hash', 'entry'], // members_hash and entry only for a manifest
 };
+
+/**
+ * Vector kinds this runner does not run (CONTRACT-0.4.0-libs.md item 9; SPEC 11): `formula`,
+ * `formula-eval`, `excel` and `decimal` are for formula evaluators, and a verifier library has
+ * none (SPEC 10.1: evaluation comes from the resolver). For such a vector the runner writes
+ * `{"id", "error": null, "skipped": "<reason>"}` and the conformance check counts it as skipped.
+ */
+export const SKIPPED_KINDS = ['formula', 'formula-eval', 'excel', 'decimal'];
+export const SKIP_REASON = 'not run: a formula-evaluator vector kind; @datumesh/verify is a verifier library without a formula evaluator (SPEC 10.1, 11)';
 
 const canonicalJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
 
 export function compare(v, got) {
   const problems = [];
   if (got.id !== v.id) problems.push(`id ${got.id}`);
+  if (SKIPPED_KINDS.includes(v.kind)) {
+    if (got.error !== null || got.skipped !== SKIP_REASON) problems.push(`expected a skipped ${v.kind} vector, got ${JSON.stringify(got).slice(0, 200)}`);
+    return problems;
+  }
   if (!v.valid) {
     if (got.error !== v.error) problems.push(`expected ${v.error}, got ${got.error}`);
     const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error');
@@ -89,6 +103,7 @@ export function receiptKeys(lib, v) {
 export function makeRunner(lib, sha256) {
   return async function run(v) {
     const out = { id: v.id, error: null };
+    if (SKIPPED_KINDS.includes(v.kind)) return { ...out, skipped: SKIP_REASON };
     try {
       switch (v.kind) {
         case 'jcs':
@@ -128,7 +143,7 @@ export function makeRunner(lib, sha256) {
           out.sig = JSON.parse(text(lib.canonicalize(inputOf(v), 'receipt'))).sig;
           out.level = res.level;
           if (blob !== null) out.blob_checked = res.blobChecked;
-          // The one code reported with success (10.1 step 7.6); absent otherwise.
+          // A code reported with success (10.1 step 7.6: E_EVAL_UNAVAILABLE, E_INPUT_SUPERSEDED); absent otherwise.
           if (res.code !== 'OK') out.code = res.code;
           break;
         }
@@ -149,6 +164,25 @@ export function makeRunner(lib, sha256) {
           if (res.receiptHash !== null) {
             out.trust = res.trust;
             out.receipt_hash = res.receiptHash;
+          }
+          break;
+        }
+        case 'slice': {
+          // The input is JSON text of a slice object (4.4) or a manifest (15.13). Parse it strictly
+          // (6.1); an object with a `members` member is taken as a manifest, anything else as a
+          // slice object (the reference tool decides the same way, DEFECTS.md 41).
+          const parsed = JSON.parse(text(lib.canonicalize(inputOf(v), 'jcs')));
+          const manifest = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'members');
+          const c = lib.canonicalize(inputOf(v), manifest ? 'manifest' : 'slice');
+          out.canonical = text(c);
+          out.sha256 = await sha256(c);
+          if (manifest) {
+            const m = JSON.parse(out.canonical);
+            out.slice_id = lib.sliceId(m.slice);
+            out.members_hash = lib.membersHash(m.members);
+            out.entry = lib.sliceEntry(inputOf(v));
+          } else {
+            out.slice_id = lib.sliceId(inputOf(v));
           }
           break;
         }

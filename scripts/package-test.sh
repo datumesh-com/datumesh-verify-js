@@ -13,14 +13,14 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The package records spec-0.3.0; the spec submodule must be that revision: the commit the
-# spec-0.3.0 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
+# The package records spec-0.4.0; the spec submodule must be that revision: the commit the
+# spec-0.4.0 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  3bac3d4*) echo "== spec submodule at $SPEC_HEAD (spec-0.3.0)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.3.0 (3bac3d4)"; exit 1 ;;
+  dedd132*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.0)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.0 (dedd132)"; exit 1 ;;
 esac
-grep -q '"spec": "spec-0.3.0"' package.json
+grep -q '"spec": "spec-0.4.0"' package.json
 
 echo "== npm pack (in node:18-slim)"
 docker run --rm -v "$ROOT":/src:ro -v "$WORK":/out node:18-slim sh -ec '
@@ -68,7 +68,7 @@ docker run --rm -v "$WORK":/pkg:ro node:18-slim sh -ec '
   mkdir /app && cd /app && npm init -y >/dev/null
   npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz typescript@5.9.3
   cat > esm.mts <<TS
-import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult } from "@datumesh/verify";
+import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, sliceId, membersHash, sliceEntry, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult, type Recompute } from "@datumesh/verify";
 const k: KeysResult = keysFromResponse("rates.example.org", 404);
 const r: VerifyResult = verify("{}", k, null, new Uint8Array([1]));
 const code: string = r.code;
@@ -77,7 +77,10 @@ const env: EnvelopeResult = checkEnvelope(404, "{\"outcome\":\"not_covered\"}", 
 const checked: boolean = r.blobChecked;
 const unit: string | null = env.ok ? null : resolvedUnit("{}", "{}");
 const e: DatumeshError | null = null;
-console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e);
+const fault: string | null = env.fault;
+const rc: Recompute = { descriptor: "{}", inputs: {}, manifests: {}, lineage: [] };
+const ids: string[] = env.ok ? [] : [sliceId("{}"), membersHash([]), sliceEntry("{}")];
+console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e, fault, rc, ids);
 TS
   cat > cjs.cts <<TS
 import lib = require("@datumesh/verify");

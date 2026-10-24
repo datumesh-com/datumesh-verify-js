@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Runs tools/run-vectors.mjs over every file in spec/vectors/ and compares its output with the
 // files: valid vectors must match every output field, invalid ones must give exactly `error`.
+// Vectors of the formula-evaluator kinds (SKIPPED_KINDS) are not run and are counted as skipped.
 // Prints a per-kind summary; exits non-zero on any mismatch.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compare } from './vector-runner.mjs';
+import { compare, SKIPPED_KINDS } from './vector-runner.mjs';
 
 export { compare };
 
@@ -31,8 +32,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const results = runAll({ DATUMESH_BUILD: process.argv[2] === 'cjs' ? 'cjs' : 'esm' });
   const summary = {};
   let bad = 0;
+  let skipped = 0;
   for (const { v, problems } of results) {
     const key = `${v.kind} ${v.valid ? 'valid' : 'invalid'}`;
+    if (SKIPPED_KINDS.includes(v.kind) && !problems.length) {
+      skipped++;
+      summary[`${v.kind} (skipped)`] ??= { pass: 0, fail: 0 };
+      summary[`${v.kind} (skipped)`].pass++;
+      continue;
+    }
     summary[key] ??= { pass: 0, fail: 0 };
     if (problems.length) {
       bad++;
@@ -40,7 +48,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(`FAIL ${v.id}: ${problems.join('; ')}`);
     } else summary[key].pass++;
   }
-  for (const k of Object.keys(summary).sort()) console.log(`${k.padEnd(18)} pass ${summary[k].pass} fail ${summary[k].fail}`);
-  console.log(`${results.length - bad}/${results.length} vectors pass`);
+  for (const k of Object.keys(summary).sort()) console.log(`${k.padEnd(22)} ${k.endsWith('(skipped)') ? `skipped ${summary[k].pass}` : `pass ${summary[k].pass} fail ${summary[k].fail}`}`);
+  console.log(`${results.length - skipped - bad}/${results.length - skipped} applicable vectors pass; ${skipped} skipped (${SKIPPED_KINDS.join(', ')}: formula-evaluator kinds)`);
   process.exit(bad ? 1 : 0);
 }

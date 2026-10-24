@@ -14,12 +14,12 @@ const keys = Object.entries(stored.keys).map(([h, e]) => keysFromResponse(h, e.h
 
 test('SPEC_VERSION and package metadata', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(SPEC_VERSION, 'spec-0.3.0');
-  assert.equal(esm.VERSION, '0.3.0');
+  assert.equal(SPEC_VERSION, 'spec-0.4.0');
+  assert.equal(esm.VERSION, '0.4.0');
   assert.equal(pkg.datumesh.spec, SPEC_VERSION);
   assert.equal(pkg.version, esm.VERSION);
   assert.equal(pkg.name, '@datumesh/verify');
-  assert.equal(ERROR_CODES.length, 42);
+  assert.equal(ERROR_CODES.length, 44); // spec-0.4.0: + E_SLICE_MEMBER, E_INPUT_SUPERSEDED
   assert.ok(ERROR_CODES.includes('E_KEY_UNAVAILABLE'));
   for (const c of ['E_CANON_UNIT', 'E_CANON_BLOB', 'E_BLOB_MISMATCH', 'E_ENVELOPE']) assert.ok(ERROR_CODES.includes(c), c);
 });

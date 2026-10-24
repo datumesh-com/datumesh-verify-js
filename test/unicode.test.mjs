@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { nfc, isNFC, isAssigned, codePoints } from '../dist/esm/unicode.js';
 import { canonicalize, DatumeshError } from '../dist/esm/index.js';
-import { makeRunner } from '../tools/vector-runner.mjs';
+import { makeRunner, SKIPPED_KINDS } from '../tools/vector-runner.mjs';
 import * as lib from '../dist/esm/index.js';
 import { root, loadVectors } from './helpers.mjs';
 
@@ -100,6 +100,7 @@ test('the library never calls String.prototype.normalize', async () => {
   try {
     const run = makeRunner(lib, (b) => createHash('sha256').update(b).digest('hex'));
     for (const v of loadVectors()) {
+      if (SKIPPED_KINDS.includes(v.kind)) continue; // formula-evaluator kinds: not run
       const got = await run(v);
       assert.equal(got.error, v.valid ? null : v.error, v.id);
     }

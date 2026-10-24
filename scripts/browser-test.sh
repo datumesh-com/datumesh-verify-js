@@ -14,7 +14,8 @@ docker run --rm -v "$ROOT":/w -w /w "$NODE_IMAGE" sh -ec '
   node -e "
     const fs = require(\"fs\"), path = require(\"path\");
     const dir = \"spec/vectors\"; const vs = [];
-    for (const g of fs.readdirSync(dir).sort()) for (const f of fs.readdirSync(path.join(dir, g)).sort()) vs.push(JSON.parse(fs.readFileSync(path.join(dir, g, f), \"utf8\")));
+    const skip = [\"formula\", \"formula-eval\", \"excel\", \"decimal\"]; /* formula-evaluator kinds: not run (tools/vector-runner.mjs) */
+    for (const g of fs.readdirSync(dir).sort()) for (const f of fs.readdirSync(path.join(dir, g)).sort()) { const v = JSON.parse(fs.readFileSync(path.join(dir, g, f), \"utf8\")); if (!skip.includes(v.kind)) vs.push(v); }
     fs.writeFileSync(\".browser-test/vectors.json\", JSON.stringify(vs));"
   npx --no-install esbuild test/browser/entry.mjs --bundle --platform=browser --format=iife --target=chrome100 --outfile=.browser-test/bundle.js --log-level=warning
   node -e "
@@ -34,7 +35,7 @@ assert m, "no result element in the dumped DOM"
 s = json.loads(html.unescape(m.group(1)))
 print(json.dumps(s, indent=1))
 assert "error" not in s, s.get("error")
-assert s["vectors"] == {"pass": 365, "fail": 0, "failures": []}, s["vectors"]
+assert s["vectors"] == {"pass": 432, "fail": 0, "failures": []}, s["vectors"]
 assert s["uriRoundTrips"] == 11 and s["ed25519"]["fail"] == 0 and s["ed25519"]["pass"] > 0
 assert s["unflippedOk"] is True and s["bitFlips"] > 5000 and s["bitFlipFailures"] == 0
 assert s["blobOk"] is True and s["blobFlips"] == 368 and s["blobFlipFailures"] == 0
