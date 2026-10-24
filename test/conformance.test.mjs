@@ -21,7 +21,7 @@ test('the vector set is complete (978 vectors at spec-0.4.0: 432 for verifier li
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.0: 18 slice vectors (11 valid, 7 invalid), 30 slice-lineage receipts (13, 17).
   assert.deepEqual([count('slice', true), count('slice', false)], [11, 7]);
-  assert.equal(vectors.filter((v) => v.kind === 'receipt' && /slice/.test(v.id)).length, 30);
+  assert.equal(vectors.filter((v) => v.kind === 'receipt' && /^(receipt\/slice-|invalid\/receipt-slice-)/.test(v.id)).length, 30); // not invalid/receipt-slice (spec-0.1.1)
 });
 
 for (const build of ['esm', 'cjs']) {
