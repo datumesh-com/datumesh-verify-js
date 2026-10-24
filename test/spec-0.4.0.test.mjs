@@ -96,7 +96,9 @@ test('slice objects and manifests: canonicalize kinds "slice" and "manifest", sl
   // Members: 64 lowercase hex each, strictly ascending, at most 1,048,576 (SPEC 4.5).
   assert.equal(codeOf(() => membersHash(['A'.repeat(64)])), 'E_CANON_HEX');
   assert.equal(codeOf(() => membersHash(['b'.repeat(64), 'a'.repeat(64)])), 'E_CANON_SET');
-  assert.equal(codeOf(() => membersHash('x')), 'E_SCHEMA');
+  assert.equal(codeOf(() => membersHash('"x"')), 'E_SCHEMA'); // a JS string is JSON text
+  assert.equal(codeOf(() => membersHash({})), 'E_SCHEMA');
+  assert.equal(codeOf(() => membersHash([1])), 'E_SCHEMA');
   const big = Array.from({ length: 1048577 }, (_, i) => i.toString(16).padStart(64, '0'));
   assert.equal(codeOf(() => membersHash(big)), 'E_CANON_LIMIT');
   // A slice object is not a manifest and vice versa; a cell without an open argument is no slice.

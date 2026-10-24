@@ -34,8 +34,8 @@ test('the embedded unit list (src/units-data.ts) is generated from spec/units.md
   assert.equal(readFileSync(OUT, 'utf8'), render(unitsMd));
   assert.deepEqual(Object.keys(groups), ['currency', 'physical', 'ratio']);
   assert.equal(CURRENCIES.length, 189);
-  for (const u of ['EUR', 'USD', 'GRD', 'XAU', 'degC', 'm/s', 'kWh', '1', 'count', 'percent', 'bp', 'mm', 'cm', 'km/h', 'hPa', 'W/m2', 'permille']) assert.ok(LITERALS.includes(u), u);
-  assert.equal(LITERALS.length, 189 + 16 + 5);
+  for (const u of ['EUR', 'USD', 'GRD', 'XAU', 'degC', 'm/s', 'kWh', '1', 'count', 'percent', 'bp', 'mm', 'cm', 'km/h', 'hPa', 'W/m2', 'permille', 'min', 'h', 'd', 'km', 'deg']) assert.ok(LITERALS.includes(u), u);
+  assert.equal(LITERALS.length, 189 + 21 + 5); // spec-0.4.0: + min, h, d, km, deg
   assert.ok(!LITERALS.includes('W/m²'));
   assert.ok(!CURRENCIES.includes('XXX'));
 });

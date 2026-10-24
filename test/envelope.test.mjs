@@ -23,7 +23,7 @@ test('there are envelope vectors for every outcome', () => {
 for (const v of envelopes) {
   test(`checkEnvelope: ${v.id} -> ${v.valid ? v.outcome : v.error}`, () => {
     const r = checkEnvelope(v.status, v.input, keysOf(v), v.request);
-    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'ok', 'outcome', 'path', 'receiptHash', 'trust']);
+    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'fault', 'ok', 'outcome', 'path', 'receiptHash', 'trust']); // fault since spec-0.4.0
     if (v.valid) {
       assert.equal(r.ok, true, r.detail);
       assert.equal(r.code, 'OK');

@@ -58,10 +58,11 @@ test('D31 revised (5.5 step 5): for ok as for stale, the receipt asof is at or b
   assert.equal(at('ok', R.asof, { age_seconds: 1 }).code, 'E_ENVELOPE');
 });
 
-test('E_EVAL_UNAVAILABLE is in ERROR_CODES after E_VALUE_MISMATCH, before E_BLOB_MISMATCH', () => {
+test('E_EVAL_UNAVAILABLE is in ERROR_CODES after E_VALUE_MISMATCH (since spec-0.4.0 followed by E_INPUT_SUPERSEDED, then E_BLOB_MISMATCH)', () => {
   const i = ERROR_CODES.indexOf('E_EVAL_UNAVAILABLE');
   assert.equal(ERROR_CODES[i - 1], 'E_VALUE_MISMATCH');
-  assert.equal(ERROR_CODES[i + 1], 'E_BLOB_MISMATCH');
+  assert.equal(ERROR_CODES[i + 1], 'E_INPUT_SUPERSEDED');
+  assert.equal(ERROR_CODES[i + 2], 'E_BLOB_MISMATCH');
 });
 
 test('10.1 step 7.6: no evaluation is success at level signed with code E_EVAL_UNAVAILABLE at $.value', () => {
