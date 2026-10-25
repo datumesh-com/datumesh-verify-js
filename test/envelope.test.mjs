@@ -110,8 +110,9 @@ test('member values (step 2)', () => {
     assert.equal(codeOf(429, rl(n)), 'E_ENVELOPE', n);
   }
   assert.equal(codeOf(429, rl('1e400')), 'E_PARSE_JSON');
-  // error: a code from SPEC 10.2 other than E_ENVELOPE; bad_request: a URI parse code.
-  for (const c of ERROR_CODES) assert.equal(codeOf(503, { outcome: 'error', error: c }), c === 'E_ENVELOPE' ? 'E_ENVELOPE' : 'OK', c);
+  // error: a code from SPEC 10.2 other than E_ENVELOPE (and, since spec-0.4.1, E_JOB_UNKNOWN);
+  // bad_request: a URI parse code (E_JOB_UNKNOWN only at a job URL: spec-0.4.1.test.mjs).
+  for (const c of ERROR_CODES) assert.equal(codeOf(503, { outcome: 'error', error: c }), c === 'E_ENVELOPE' || c === 'E_JOB_UNKNOWN' ? 'E_ENVELOPE' : 'OK', c);
   for (const c of ['E_TEAPOT', 'OK', '', 'e_signature', 'E_SIGNATURE ', 5, null]) assert.equal(codeOf(503, { outcome: 'error', error: c }), 'E_ENVELOPE', String(c));
   const PARSE = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
   for (const c of ERROR_CODES) assert.equal(codeOf(400, { outcome: 'bad_request', error: c }), PARSE.includes(c) ? 'OK' : 'E_ENVELOPE', c);
