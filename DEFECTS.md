@@ -51,6 +51,10 @@ evaluators (SPEC 10.1: evaluation comes from the resolver); the runner skips the
 
 ## Status at spec `18be70f`
 
+The final `spec-0.4.0` text is spec commit `f3d3e2c` (the tag goes there): after `18be70f` only
+formula-dialect text, reference formula tool fixes and the removal of `site/`; no vector, schema
+or `units.md` change, so nothing below changes.
+
 Spec commit `18be70f` (on top of `dedd132`; no vector result and no hash changed) settles entries
 38-45 in the text, each as the reference tool already behaved and as the library already did,
 with two exceptions noted below. Their text is kept as written.
