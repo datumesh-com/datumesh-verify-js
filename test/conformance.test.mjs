@@ -12,12 +12,14 @@ import { loadVectors } from './helpers.mjs';
 const vectors = loadVectors();
 const applicable = vectors.filter((v) => !SKIPPED_KINDS.includes(v.kind));
 
-test('the vector set is complete (978 vectors at spec-0.4.0: 432 for verifier libraries, 546 formula-evaluator vectors)', () => {
-  assert.equal(vectors.length, 978);
+test('the vector set is complete (1024 vectors at spec-0.4.1: 478 for verifier libraries, 546 formula-evaluator vectors)', () => {
+  assert.equal(vectors.length, 1024);
   const kinds = new Set(vectors.map((v) => v.kind));
-  assert.deepEqual([...kinds].sort(), ['cell', 'decimal', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
+  assert.deepEqual([...kinds].sort(), ['cell', 'decimal', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'mesh', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['decimal', 'excel', 'formula', 'formula-eval']);
-  assert.equal(applicable.length, 432);
+  assert.equal(applicable.length, 478);
+  // SPEC 14 spec-0.4.1: the kind mesh, 3 valid and 17 invalid.
+  assert.deepEqual([count('mesh', true), count('mesh', false)], [3, 17]);
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.0: 18 slice vectors (11 valid, 7 invalid), 30 slice-lineage receipts (13, 17).
   assert.deepEqual([count('slice', true), count('slice', false)], [11, 7]);

@@ -10,20 +10,20 @@ import { loadVectors, vector } from './helpers.mjs';
 
 const envelopes = loadVectors().filter((v) => v.kind === 'envelope');
 const keysOf = (v) => Object.entries(v.keys).map(([h, e]) => keysFromResponse(h, typeof e.https.status === 'number' ? e.https.status : null, e.https.body));
-const STATUS = { ok: [200], stale: [200], not_covered: [404], unlicensed: [403], payment_required: [402], rate_limited: [429], bad_request: [400] };
+const STATUS = { ok: [200], stale: [200], not_covered: [404], unlicensed: [403], payment_required: [402], rate_limited: [429], bad_request: [400], pending: [202] };
 const matches = (outcome, s) => (outcome === 'error' ? s >= 500 && s <= 599 : STATUS[outcome].includes(s));
 const OTHER = [100, 199, 200, 201, 204, 301, 302, 304, 400, 401, 402, 403, 404, 409, 429, 499, 500, 502, 503, 599, 600, 0, 999];
 
 test('there are envelope vectors for every outcome', () => {
-  assert.equal(envelopes.length, 63); // spec-0.4.0: + not-covered-fault and two invalid fault envelopes
+  assert.equal(envelopes.length, 89); // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN)
   const outcomes = new Set(envelopes.filter((v) => v.valid).map((v) => v.outcome));
-  assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'rate_limited', 'stale', 'unlicensed']);
+  assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'pending', 'rate_limited', 'stale', 'unlicensed']);
 });
 
 for (const v of envelopes) {
   test(`checkEnvelope: ${v.id} -> ${v.valid ? v.outcome : v.error}`, () => {
     const r = checkEnvelope(v.status, v.input, keysOf(v), v.request);
-    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'fault', 'ok', 'outcome', 'path', 'receiptHash', 'trust']); // fault since spec-0.4.0
+    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'fault', 'ok', 'outcome', 'path', 'pending', 'receiptHash', 'trust']); // fault since spec-0.4.0, pending since spec-0.4.1
     if (v.valid) {
       assert.equal(r.ok, true, r.detail);
       assert.equal(r.code, 'OK');

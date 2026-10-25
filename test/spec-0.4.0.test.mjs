@@ -33,7 +33,7 @@ test('ERROR_CODES: E_SLICE_MEMBER after E_INPUT_UNDECLARED, E_INPUT_SUPERSEDED a
   assert.equal(ERROR_CODES[at('E_SLICE_MEMBER') + 1], 'E_VALUE_MISMATCH');
   assert.equal(ERROR_CODES[at('E_INPUT_SUPERSEDED') - 1], 'E_EVAL_UNAVAILABLE');
   assert.equal(ERROR_CODES[at('E_INPUT_SUPERSEDED') + 1], 'E_BLOB_MISMATCH');
-  assert.equal(ERROR_CODES.length, 44);
+  assert.equal(ERROR_CODES.length, 46); // spec-0.4.1: + E_JOB_UNKNOWN, E_MESH_DOC
 });
 
 test('the library agrees with the reference tool on every spec-0.4.0 probe', async () => {

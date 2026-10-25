@@ -20,7 +20,24 @@ export const OUTPUTS = {
   unit: ['unit'],
   envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
   slice: ['canonical', 'sha256', 'slice_id', 'members_hash', 'entry'], // members_hash and entry only for a manifest
+  mesh: ['bindings', 'endpoints'],
 };
+
+/** The endpoints SPEC 9.6 defines; a resolved mesh keeps only these. */
+export const MESH_ENDPOINTS = ['blob', 'cell', 'cells', 'descriptor', 'explain', 'find', 'jobs', 'manifest', 'receipt', 'slice', 'verify'];
+
+/**
+ * The expected outputs of a valid vector. SPEC 11 lists `bindings` and `endpoints` as a valid
+ * `mesh` vector's outputs, but the spec-0.4.1 vector files do not carry them (DEFECTS.md 47);
+ * when they are absent they are taken from the vector's own mesh document: its `bindings`, and
+ * its `endpoints` without unknown members (9.6). A file that carries them is compared as is.
+ */
+export function expected(v) {
+  if (v.kind !== 'mesh' || !v.valid || v.bindings !== undefined) return v;
+  const doc = JSON.parse(v.env.mesh.https.body);
+  const endpoints = Object.fromEntries(Object.entries(doc.endpoints).filter(([k]) => MESH_ENDPOINTS.includes(k)));
+  return { ...v, bindings: doc.bindings, endpoints };
+}
 
 /**
  * Vector kinds this runner does not run (CONTRACT-0.4.0-libs.md item 9; SPEC 11): `formula`,
@@ -54,7 +71,8 @@ export function compare(v, got) {
     const want = v.blob_hex !== undefined ? true : undefined;
     if (got.blob_checked !== want) problems.push(`blob_checked: expected ${want}, got ${got.blob_checked}`);
   }
-  for (const k of OUTPUTS[v.kind]) if (!(v.kind === 'receipt' && k === 'blob_checked' && v.blob_checked === undefined)) if (canonicalJson(got[k]) !== canonicalJson(v[k])) problems.push(`${k}: expected ${JSON.stringify(v[k]).slice(0, 200)}, got ${JSON.stringify(got[k]).slice(0, 200)}`);
+  const want = expected(v);
+  for (const k of OUTPUTS[v.kind]) if (!(v.kind === 'receipt' && k === 'blob_checked' && v.blob_checked === undefined)) if (canonicalJson(got[k]) !== canonicalJson(want[k])) problems.push(`${k}: expected ${JSON.stringify(want[k]).slice(0, 200)}, got ${JSON.stringify(got[k]).slice(0, 200)}`);
   const extra = Object.keys(got).filter((k) => k !== 'id' && k !== 'error' && !OUTPUTS[v.kind].includes(k));
   if (extra.length) problems.push(`unexpected outputs ${extra}`);
   return problems;
@@ -96,6 +114,15 @@ export function recomputeOf(v) {
 }
 
 /** Keys for a receipt vector: one KeysResult per host in `keys` (absent hosts: no source). */
+/**
+ * A `mesh` vector's env member ({"https": {"status", "body"?}}, absent: a failed retrieval) as
+ * the response resolveMesh takes: {status, body}, with "error" (a network failure) as null.
+ */
+export function responseOf(env) {
+  const h = (env && env.https) || { status: 'error' };
+  return { status: h.status === 'error' ? null : h.status, body: h.body };
+}
+
 export function receiptKeys(lib, v) {
   return Object.entries(v.keys || {}).map(([host, env]) => keysFromEnv(lib, host, env));
 }
@@ -165,6 +192,14 @@ export function makeRunner(lib, sha256) {
             out.trust = res.trust;
             out.receipt_hash = res.receiptHash;
           }
+          break;
+        }
+        case 'mesh': {
+          const env = v.env || {};
+          const r = lib.resolveMesh(v.host, { keys: responseOf(env.keys), mesh: responseOf(env.mesh) });
+          if (!r.ok) return { id: v.id, error: r.code };
+          out.bindings = r.bindings;
+          out.endpoints = r.endpoints;
           break;
         }
         case 'slice': {
