@@ -17,8 +17,8 @@ trap 'rm -rf "$WORK"' EXIT
 # spec-0.4.1 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  0dac072*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.1)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.1 (0dac072)"; exit 1 ;;
+  3f79313*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.1)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.1 (3f79313)"; exit 1 ;;
 esac
 grep -q '"spec": "spec-0.4.1"' package.json
 

@@ -11,7 +11,10 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import * as lib from '../dist/esm/index.js';
 import { makeRunner } from '../tools/vector-runner.mjs';
+import { createRequire } from 'node:module';
 import { root, vector, utf8 } from './helpers.mjs';
+
+const cjs = createRequire(import.meta.url)('../dist/cjs/index.js');
 
 const { checkEnvelope, resolveMesh, verify, keysFromResponse, ERROR_CODES } = lib;
 
@@ -91,6 +94,47 @@ test('9.6 resolveMesh: bindings and the known endpoints; failures with the order
   assert.equal(fail(res(v.env.keys), { status: 200, body: '[]' }), 'E_MESH_DOC');
   assert.throws(() => resolveMesh(v.host), TypeError);
   assert.throws(() => resolveMesh(5, { keys: {}, mesh: {} }), TypeError);
+});
+
+test('3f79313: poll names a DNS name; it may be another one (the client\'s HTTP layer checks it)', () => {
+  const v = vector('envelope/pending');
+  const b = JSON.parse(v.input);
+  const at = (poll) => checkEnvelope(202, JSON.stringify({ ...b, poll }), [], v.request).code;
+  for (const h of ['', 'mesh.example:443', 'u@mesh.example', '192.0.2.1', 'Mesh.example', 'mesh.example?x', 'mesh', 'mesh.example.']) assert.equal(at(`https://${h}/jobs/${b.job}`), 'E_ENVELOPE', h);
+  for (const h of ['mesh.example', 'elsewhere.example', 'a.b.example.org']) assert.equal(at(`https://${h}/jobs/${b.job}`), 'OK', h);
+  assert.equal(at(`https://mesh.example/x/y/jobs/${b.job}`), 'OK');
+});
+
+test('3f79313: every brace of an endpoint template belongs to a placeholder; key-side identity only for strings', () => {
+  const v = vector('mesh/full');
+  const doc = JSON.parse(v.env.mesh.https.body);
+  const keys = { status: 200, body: v.env.keys.https.body };
+  const withEp = (e) => resolveMesh(v.host, { keys, mesh: { status: 200, body: JSON.stringify({ ...doc, endpoints: { ...doc.endpoints, ...e } }) } }).code;
+  const U = 'https://mesh.example.org';
+  for (const t of [`${U}/cells}`, `${U}/cells{`, `${U}/cells{}`, `${U}/receipt/{hash}}`, `${U}/cells/{Cell}`]) assert.equal(withEp(t.includes('receipt') ? { receipt: t } : { cells: t }), 'E_MESH_DOC', t);
+  assert.equal(withEp({ receipt: `${U}/r?h={hash}` }), 'OK');
+  assert.equal(withEp({ x_b: `${U}/{{}` }), 'OK'); // unknown endpoints are not checked
+  // bindings is a URL, not a template.
+  assert.equal(resolveMesh(v.host, { keys, mesh: { status: 200, body: JSON.stringify({ ...doc, bindings: `${U}/b/{x}}` }) } }).code, 'OK');
+  // The key document's proto and host are compared only where each is a string in an object.
+  const kd = JSON.parse(v.env.keys.https.body);
+  const withKeys = (k) => resolveMesh(v.host, { keys: { status: 200, body: JSON.stringify(k) }, mesh: { status: 200, body: v.env.mesh.https.body } }).code;
+  const { proto, ...noProto } = kd;
+  assert.equal(withKeys(noProto), 'E_KEY_DOC');
+  assert.equal(withKeys({ ...kd, proto: 1 }), 'E_KEY_DOC');
+  assert.equal(withKeys({ ...kd, proto: 'datumesh/2' }), 'E_MESH_DOC');
+  assert.equal(withKeys({ ...kd, host: 'other.example.org' }), 'E_MESH_DOC');
+  assert.equal(withKeys('x'), 'E_KEY_DOC');
+});
+
+test('cross-check case mesh-fuzz/0344-1-1 (key document "x", mesh proto 1): E_MESH_DOC in both module formats', async () => {
+  const v = JSON.parse(readFileSync(join(root, 'test', 'fixtures', 'mesh-fuzz-0344-1-1.json'), 'utf8'));
+  const sha = (b) => createHash('sha256').update(b).digest('hex');
+  for (const [name, l] of [['esm', lib], ['cjs', cjs]]) {
+    assert.deepEqual(await makeRunner(l, sha)(v), { id: v.id, error: 'E_MESH_DOC' }, name);
+    const e = v.env;
+    assert.equal(l.resolveMesh(v.host, { keys: { status: 200, body: e.keys.https.body }, mesh: { status: 200, body: e.mesh.https.body } }).code, 'E_MESH_DOC', name);
+  }
 });
 
 test('E_MESH_DOC and E_JOB_UNKNOWN are never verification results', () => {

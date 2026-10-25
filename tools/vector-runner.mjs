@@ -27,16 +27,12 @@ export const OUTPUTS = {
 export const MESH_ENDPOINTS = ['blob', 'cell', 'cells', 'descriptor', 'explain', 'find', 'jobs', 'manifest', 'receipt', 'slice', 'verify'];
 
 /**
- * The expected outputs of a valid vector. SPEC 11 lists `bindings` and `endpoints` as a valid
- * `mesh` vector's outputs, but the spec-0.4.1 vector files do not carry them (DEFECTS.md 47);
- * when they are absent they are taken from the vector's own mesh document: its `bindings`, and
- * its `endpoints` without unknown members (9.6). A file that carries them is compared as is.
+ * The expected outputs of a valid vector: the file's own. (At 0dac072 the valid `mesh` vectors
+ * lacked `bindings` and `endpoints` and this derived them, DEFECTS.md 47; since 3f79313 they carry
+ * them.)
  */
 export function expected(v) {
-  if (v.kind !== 'mesh' || !v.valid || v.bindings !== undefined) return v;
-  const doc = JSON.parse(v.env.mesh.https.body);
-  const endpoints = Object.fromEntries(Object.entries(doc.endpoints).filter(([k]) => MESH_ENDPOINTS.includes(k)));
-  return { ...v, bindings: doc.bindings, endpoints };
+  return v;
 }
 
 /**
