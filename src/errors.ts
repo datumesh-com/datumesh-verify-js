@@ -1,10 +1,12 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.4.0';
+export const SPEC_VERSION = 'spec-0.4.1';
 
 /**
  * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` and
  * `E_INPUT_SUPERSEDED` are not failures: `verify` reports them with success at level "signed"
- * (10.1 step 7.6).
+ * (10.1 step 7.6). Since spec-0.4.1 `E_JOB_UNKNOWN` (a mesh's answer in a `bad_request`
+ * envelope at a job URL, 5.5) and `E_MESH_DOC` (a result of cross-mesh resolution, 9.6) are not
+ * verification results either.
  */
 export const ERROR_CODES = [
   'E_PARSE_JSON',
@@ -51,6 +53,8 @@ export const ERROR_CODES = [
   'E_INPUT_SUPERSEDED',
   'E_BLOB_MISMATCH',
   'E_ENVELOPE',
+  'E_JOB_UNKNOWN',
+  'E_MESH_DOC',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -12,7 +12,9 @@
 # plus mutations of the spec's vectors, all judged by the reference tool in one batch run.
 # Mode `probes` (tools/oracle-diff/probes_0_4.py) covers the spec-0.4.0 additions (slice objects,
 # manifests, order/extent, slice entries, step 7.5 for slices, E_INPUT_SUPERSEDED); its verdicts
-# are kept as test/fixtures/oracle-probes-0.4.0.jsonl.gz (gzip -9 -n of /out/probes.jsonl).
+# are kept as test/fixtures/oracle-probes-0.4.0.jsonl.gz (gzip -9 -n of /out/probes.jsonl); with
+# tools/oracle-diff/probes_0_4_1.py (spec-0.4.1: pending, job binding, mesh documents) as
+# test/fixtures/oracle-probes-0.4.1.jsonl.gz.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -25,8 +27,10 @@ cp -r spec/schemas spec/units.md "$WORK/w/spec/"
 for MODE in ${MODES:-random semantic bytes cases probes}; do
   echo "== mode $MODE"
   if [ "$MODE" = probes ]; then
-    docker run --rm -v "$WORK/w":/w -v "$ROOT/spec":/spec:ro -v "$ROOT/tools/oracle-diff":/p:ro -v "$WORK/out":/out datumesh-test python /p/probes_0_4.py /out/fuzz.jsonl | tail -1
-    docker run --rm -v "$ROOT":/w:ro -v "$WORK/out":/out -w /w node:22-slim node tools/oracle-diff/fuzz_cmp.mjs
+    for P in probes_0_4 probes_0_4_1; do
+      docker run --rm -v "$WORK/w":/w -v "$ROOT/spec":/spec:ro -v "$ROOT/tools/oracle-diff":/p:ro -v "$WORK/out":/out datumesh-test python /p/$P.py /out/fuzz.jsonl | tail -1
+      docker run --rm -v "$ROOT":/w:ro -v "$WORK/out":/out -w /w node:22-slim node tools/oracle-diff/fuzz_cmp.mjs
+    done
     continue
   fi
   if [ "$MODE" = cases ]; then

@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.4.0).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.4.1).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -13,14 +13,15 @@ import { KINDS, cellUnit, inferKind, validate, validateMembers, type Kind } from
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
 export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { checkEnvelope, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault } from './envelope.js';
+export { checkEnvelope, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending } from './envelope.js';
+export { resolveMesh, MESH_ENDPOINTS, type MeshResult, type DocumentResponse } from './mesh.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
 export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.4.0';
+export const VERSION = '0.4.1';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);

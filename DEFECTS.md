@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.1` (entries 46-50), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -18,6 +18,86 @@ Where SPEC.md is silent or ambiguous, I follow the reference tool. Every vector 
 Each entry is marked as a **conflict** (prose and reference tool disagree, or prose and a vector
 disagree), a **gap** (the prose does not decide the question), or **underspecified** (the rule
 exists but its exact form had to be inferred).
+
+---
+
+# spec-0.4.1
+
+`spec-0.4.1` (spec commit `0dac072`, 1024 vectors, 478 for a verifier library) adds the `pending`
+envelope outcome with job binding (5.5), `E_JOB_UNKNOWN`, the mesh document and cross-mesh
+resolution (9.6, 9.7) with `E_MESH_DOC`, and six formula-evaluation text items (8.2, 15) that do
+not concern a verifier library. Worked from the diff of `SPEC.md`, `units.md`, `schemas/` and
+`vectors/` between `f3d3e2c` and `0dac072` and the cross-check README; the reference tool was
+run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdicts in
+`test/fixtures/oracle-probes-0.4.1.jsonl.gz`, all matched by the library).
+
+| Change | Library change |
+|---|---|
+| `pending` (5.5) | `checkEnvelope` accepts it (202; `estimate_seconds`, `job`, `poll`, `request`; no receipt or trust) and exposes `EnvelopeResult.pending` = `{ job, poll, estimateSeconds }` (null otherwise) |
+| Job binding (5.5 step 5) | `EnvelopeRequest.job` (32-64 lowercase hex; malformed is a `TypeError`): a `pending` answer must echo the request exactly and carry that job; other outcomes bind against `cell_id`/`asof` as before |
+| `E_JOB_UNKNOWN`, `E_MESH_DOC` (10.2) | Added after `E_ENVELOPE` (46 codes). `bad_request` may carry `E_JOB_UNKNOWN` only with `request.job`; `error` may carry neither `E_ENVELOPE` nor `E_JOB_UNKNOWN` |
+| Mesh document (9.6) | `resolveMesh(host, { keys, mesh })` returning `{ ok, code, host, detail, path, bindings, endpoints, keys }`; `MESH_ENDPOINTS` |
+
+## 46. Gap: the identity check when the key document is not an object, or has no `host` or `proto` (9.6 step 4)
+
+- **Problem.** Step 4 compares "the key document's `host`, where it is a string" and requires "the
+  two `proto`s are equal and `"datumesh/1"`". It does not say what happens when the key document
+  is valid JSON but not an object (`[]`, `"x"`, `null`), or has no `proto`, or a `host` that is
+  not a string.
+- **Resolution (the reference tool, probed).** A key document that is not an object skips the
+  key side of step 4 and fails 9.2 in step 5 (`E_KEY_DOC`), although its `proto` is not
+  `"datumesh/1"`; the mesh side is still checked (`[]` with a mesh `proto` of `datumesh/2` is
+  `E_MESH_DOC`). An object without `proto`, or with a non-string `proto`, disagrees
+  (`E_MESH_DOC`). A non-string or absent `host` is skipped (`E_KEY_DOC` later).
+- **Proposed wording (9.6 step 4).** "... and, when the key document is an object, its `proto`
+  equals the mesh document's (a missing `proto` does not). A key document that is not an object
+  is left to step 5."
+
+## 47. Conflict: valid `mesh` vectors have no outputs (11)
+
+- **Problem.** SPEC 11 lists `bindings` and `endpoints` as the outputs of a valid `mesh` vector,
+  and `schemas/vector.schema.json` defines both, but `vectors/mesh/full.json`,
+  `required-only.json` and `extension-members.json` carry neither, so a runner's outputs cannot be
+  compared with the files.
+- **Resolution.** The runner emits both. Where a file lacks them, `tools/vector-runner.mjs`
+  compares with the vector's own mesh document: its `bindings` and its endpoints without unknown
+  members (9.6, "Unknown members are dropped from the result"). A file that carries them is
+  compared as is.
+- **Proposed fix.** Add `bindings` and `endpoints` to the three valid `mesh` vectors.
+
+## 48. Gap: a 200 key response without a body (9.6 steps 1 and 3)
+
+- **Problem.** Step 1 retrieves the key document "as in 9.3 (`E_KEY_UNAVAILABLE`)", step 3 parses
+  it (`E_KEY_DOC`). 9.3 makes a 200 "with no document" `E_KEY_DOC`; it is not said whether that is
+  reported at step 1 (before the mesh document's retrieval) or at step 3 (after it).
+- **Resolution (the reference tool, probed).** At step 1: a 200 without a body with a mesh
+  document answering 404 is `E_KEY_DOC`, while a 200 with unparseable text and the same 404 is
+  `E_MESH_DOC`.
+- **Proposed wording (9.6 step 1).** "Retrieve the key document as in 9.3: `E_KEY_UNAVAILABLE`,
+  or `E_KEY_DOC` for a 200 without a body."
+
+## 49. Underspecified: "on this host (its authority is exactly `host`, followed by a path)" (9.6)
+
+- **Problem.** The rule does not say what counts as the authority and the path, whether the
+  bindings URL may contain `{`, or whether a `}` without a `{` is allowed in an endpoint.
+- **Resolution (the reference tool, probed).** A URL is on the host when it begins
+  `https://<host>/` exactly: a port, userinfo, or a query straight after the host
+  (`https://h?x=1`) is `E_MESH_DOC`, and `https://h/` is accepted. The placeholder rule applies to
+  endpoints only: a bindings URL may contain braces. In an endpoint only `{` is counted: a stray
+  `}` is accepted, `{}` is not, and a placeholder may stand in the query. Unknown endpoints are not
+  checked at all (not even that they are strings or on the host).
+- **Proposed wording.** "A URL is on this host when it begins `https://<host>/`. In an endpoint,
+  each listed placeholder occurs once and no other `{` occurs; the bindings URL has no
+  placeholders and is not checked for braces."
+
+## 50. Note: `poll` is not checked for a host (5.5)
+
+- **Observation.** 5.5 says a client MUST NOT send a `poll` URL to another host, and that the
+  envelope check cannot see this. Accordingly the check accepts `poll` on any host and with any
+  path before `/jobs/<job>`, including an empty authority (`https:///jobs/<job>`, reference tool
+  probed). The library documents that the caller's HTTP layer must compare the host.
+- **No spec change proposed**; a sentence that `poll`'s authority is not checked by step 2 would
+  make it explicit.
 
 ---
 
