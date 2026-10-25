@@ -105,12 +105,13 @@ export function resolveMesh(host: string, responses: { keys?: DocumentResponse; 
     const md = parse(m.body);
     if (md === undefined) no('E_MESH_DOC', 'the mesh document is not strict JSON');
     if (!isObject(md)) no('E_MESH_DOC', 'the mesh document is not a JSON object');
-    // 4. The two documents describe the same mesh. A key document that is not an object has no
-    // host or proto to compare: it fails 9.2 in step 5 (DEFECTS.md 46).
+    // 4. The two documents describe the same mesh: the mesh document's host and proto; the key
+    // document's host and proto only where each is a string in an object (anything else is the
+    // key document's own failure, E_KEY_DOC in step 5).
     if (md.host !== host) no('E_MESH_DOC', `the mesh document names another host than ${host}`, '$.host');
-    if (isObject(kd) && typeof kd.host === 'string' && kd.host !== host) no('E_MESH_DOC', `the key document names another host than ${host}`, '$.host');
     if (md.proto !== 'datumesh/1') no('E_MESH_DOC', 'the mesh document\'s proto is not "datumesh/1"', '$.proto');
-    if (isObject(kd) && kd.proto !== md.proto) no('E_MESH_DOC', 'the key document and the mesh document disagree on proto', '$.proto');
+    if (isObject(kd) && typeof kd.host === 'string' && kd.host !== host) no('E_MESH_DOC', `the key document names another host than ${host}`, '$.host');
+    if (isObject(kd) && typeof kd.proto === 'string' && kd.proto !== 'datumesh/1') no('E_MESH_DOC', 'the key document names another protocol than the mesh document', '$.proto');
     // 5. The key document by 9.2.
     if (!keys.ok || !keys.keys) no('E_KEY_DOC', keys.detail);
     // 6. The mesh document's members: bindings, endpoints (every required one), then each known
@@ -127,9 +128,15 @@ export function resolveMesh(host: string, responses: { keys?: DocumentResponse; 
       if (!spec || !Object.prototype.hasOwnProperty.call(MESH_ENDPOINTS, name)) continue;
       const p = `$.endpoints.${name}`;
       const url = onHost(eps[name], host, name, p);
-      const braces = url.split('{').length - 1;
-      if (braces !== spec.placeholders.length || spec.placeholders.some((ph) => url.split(`{${ph}}`).length !== 2)) {
-        no('E_MESH_DOC', `${name} has exactly the placeholders ${spec.placeholders.map((x) => `{${x}}`).join(', ') || '(none)'}, each once, and no other {`, p);
+      // Each listed placeholder exactly once, and every { and } belongs to one of them.
+      let rest = url;
+      const once = spec.placeholders.every((ph) => {
+        const parts = rest.split(`{${ph}}`);
+        rest = parts.join('');
+        return parts.length === 2;
+      });
+      if (!once || rest.includes('{') || rest.includes('}')) {
+        no('E_MESH_DOC', `${name} has exactly the placeholders ${spec.placeholders.map((x) => `{${x}}`).join(', ') || '(none)'}, each once, and no other brace`, p);
       }
       endpoints[name] = url;
     }

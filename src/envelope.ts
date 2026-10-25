@@ -2,7 +2,7 @@
 // Synchronous, offline; the embedded receipt is verified through step 6 with the given keys.
 import { DatumeshError, ERROR_CODES, type ErrorCode } from './errors.js';
 import { has, isObject, memberPath, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
-import { LIMITS, URL_RE, checkNumber, checkString, isHex, isInstant } from './lexical.js';
+import { LIMITS, URL_RE, checkDnsName, checkNumber, checkString, isHex, isInstant } from './lexical.js';
 import { sha256Hex } from './hash.js';
 import { jcsBytes } from './jcs.js';
 import { collectSources } from './keys.js';
@@ -172,9 +172,11 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
         if (typeof v !== 'string' || !JOB_RE.test(v)) bad('job is 32 to 64 lowercase hex digits', p);
         break;
       case 'poll':
-        // SPEC 5.5: https:// and printable ASCII, at most 512 characters, ending /jobs/<job>. That it
-        // is on the host asked is the client's HTTP layer's check, not this one's.
+        // SPEC 5.5: https:// and printable ASCII, at most 512 characters, ending /jobs/<job>; the text
+        // between https:// and the next / is a DNS name (2.1). That it is the host asked is the
+        // client's HTTP layer's check (MUST), which an envelope cannot make.
         if (typeof v !== 'string' || !URL_RE.test(v) || v.length > LIMITS.licence_url || !v.endsWith(`/jobs/${String(o.job)}`)) bad("poll is the job's https URL, at most 512 characters, ending /jobs/<job>", p);
+        if (!isDnsName(v.slice('https://'.length).split('/')[0])) bad("poll's host (between https:// and the next /) is a DNS name: no port, userinfo, IP address, uppercase or query", p);
         break;
       case 'request': {
         const ok =
@@ -221,6 +223,16 @@ function checkRequest(request: unknown): void {
     (!has(request, 'asof') || (typeof request.asof === 'string' && isInstant(request.asof))) &&
     (!has(request, 'job') || (typeof request.job === 'string' && JOB_RE.test(request.job)));
   if (!ok) throw new TypeError('request must be {cell_id: <64 lowercase hex>, asof?: <instant>, job?: <32-64 lowercase hex>}: the cell id of the original request (resolved to the fn_hash used), its asof if it had one, and the job polled when the body answers a job URL');
+}
+
+function isDnsName(s: string): boolean {
+  try {
+    checkDnsName(s, '$');
+    return true;
+  } catch (e) {
+    if (e instanceof DatumeshError) return false;
+    throw e;
+  }
 }
 
 const hostOf = (s: string, sep: string) => {

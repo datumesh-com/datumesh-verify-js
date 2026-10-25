@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.1` (entries 46-50), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -38,7 +38,21 @@ run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdict
 | `E_JOB_UNKNOWN`, `E_MESH_DOC` (10.2) | Added after `E_ENVELOPE` (46 codes). `bad_request` may carry `E_JOB_UNKNOWN` only with `request.job`; `error` may carry neither `E_ENVELOPE` nor `E_JOB_UNKNOWN` |
 | Mesh document (9.6) | `resolveMesh(host, { keys, mesh })` returning `{ ok, code, host, detail, path, bindings, endpoints, keys }`; `MESH_ENDPOINTS` |
 
-## 46. Gap: the identity check when the key document is not an object, or has no `host` or `proto` (9.6 step 4)
+## Status at spec `3f79313`
+
+Spec commit `3f79313` (on top of `0dac072`; 13 vectors added, 1037 in all, 491 for a verifier
+library; no `spec-0.4.0` vector changes) settles entries 46-50. Three of them changed a rule, and
+the library follows: the entries' text below is kept as written at `0dac072`.
+
+| Entry | Settled by | Library change |
+|---|---|---|
+| 46 | 9.6 step 4: "the key document's `host` and `proto`, each where it is a string, equal the host fetched and `"datumesh/1"` ... The key document's side is compared only for a member that is a string in an object: a key document that is valid JSON but is not an object, or that has no `host` or `proto` or a non-string one, has nothing to compare there, and fails at step 5 as `E_KEY_DOC`" | **Changed:** a key document object without `proto`, or with a non-string one, is now `E_KEY_DOC` (was `E_MESH_DOC`, as the reference tool had given) |
+| 47 | 11 and the files: the valid `mesh` vectors carry `bindings` and `endpoints`, and the reference tool requires them | the runner compares the files' outputs; the fallback is gone |
+| 48 | 9.6 step 1: "a 200 response without a body is `E_KEY_DOC`, here at step 1, before the mesh document is retrieved" | none |
+| 49 | 9.6: "**A URL is on this host** when it begins `https://<host>/`, with `host` exactly as fetched ... The same rule holds for `bindings`, which is a URL, not a template: its `{` and `}` are not checked"; "Every `{` and `}` in a template belongs to one of its placeholders: a lone `}` (or `{`), `{}`, an unlisted name such as `{Cell}`, or a listed one twice is `E_MESH_DOC`"; "Unknown endpoints are not checked either" | **Changed:** a lone `}` in an endpoint template is now `E_MESH_DOC` (was accepted, as the reference tool had) |
+| 50 | 5.5 `poll`: "The text between `https://` and the next `/` is a DNS name (2.1): so an empty host (`https:///jobs/…`), a port, userinfo, an IP address or a query right after the host is `E_ENVELOPE`"; "the client's HTTP layer MUST check that `poll` names the host it sent the request to" | **Changed:** `poll`'s authority must be a DNS name by 2.1 (lowercase, two labels or more, no trailing dot); another DNS name still passes |
+
+## 46. Gap: the identity check when the key document is not an object, or has no `host` or `proto` (9.6 step 4) [resolved at 3f79313]
 
 - **Problem.** Step 4 compares "the key document's `host`, where it is a string" and requires "the
   two `proto`s are equal and `"datumesh/1"`". It does not say what happens when the key document
@@ -53,7 +67,7 @@ run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdict
   equals the mesh document's (a missing `proto` does not). A key document that is not an object
   is left to step 5."
 
-## 47. Conflict: valid `mesh` vectors have no outputs (11)
+## 47. Conflict: valid `mesh` vectors have no outputs (11) [resolved at 3f79313]
 
 - **Problem.** SPEC 11 lists `bindings` and `endpoints` as the outputs of a valid `mesh` vector,
   and `schemas/vector.schema.json` defines both, but `vectors/mesh/full.json`,
@@ -65,7 +79,7 @@ run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdict
   compared as is.
 - **Proposed fix.** Add `bindings` and `endpoints` to the three valid `mesh` vectors.
 
-## 48. Gap: a 200 key response without a body (9.6 steps 1 and 3)
+## 48. Gap: a 200 key response without a body (9.6 steps 1 and 3) [resolved at 3f79313]
 
 - **Problem.** Step 1 retrieves the key document "as in 9.3 (`E_KEY_UNAVAILABLE`)", step 3 parses
   it (`E_KEY_DOC`). 9.3 makes a 200 "with no document" `E_KEY_DOC`; it is not said whether that is
@@ -76,7 +90,7 @@ run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdict
 - **Proposed wording (9.6 step 1).** "Retrieve the key document as in 9.3: `E_KEY_UNAVAILABLE`,
   or `E_KEY_DOC` for a 200 without a body."
 
-## 49. Underspecified: "on this host (its authority is exactly `host`, followed by a path)" (9.6)
+## 49. Underspecified: "on this host (its authority is exactly `host`, followed by a path)" (9.6) [resolved at 3f79313]
 
 - **Problem.** The rule does not say what counts as the authority and the path, whether the
   bindings URL may contain `{`, or whether a `}` without a `{` is allowed in an endpoint.
@@ -90,7 +104,7 @@ run as a black box over 107 probes (`tools/oracle-diff/probes_0_4_1.py`; verdict
   each listed placeholder occurs once and no other `{` occurs; the bindings URL has no
   placeholders and is not checked for braces."
 
-## 50. Note: `poll` is not checked for a host (5.5)
+## 50. Note: `poll` is not checked for a host (5.5) [resolved at 3f79313]
 
 - **Observation.** 5.5 says a client MUST NOT send a `poll` URL to another host, and that the
   envelope check cannot see this. Accordingly the check accepts `poll` on any host and with any
