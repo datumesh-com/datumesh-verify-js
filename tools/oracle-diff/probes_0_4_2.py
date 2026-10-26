@@ -63,6 +63,11 @@ add('e-error-canon-hex', env_probe('envelope/error.json', error='E_CANON_HEX'))
 add('e-error-slice-member', env_probe('envelope/error.json', error='E_SLICE_MEMBER'))
 add('e-unlicensed-error', env_probe('envelope/unlicensed.json', error='E_NAME_UNBOUND'))
 add('e-fault-with-unpinned-echo', env_probe('envelope/not-covered-fault.json', fn_hash=H0))
+# ---- malformed request descriptions
+add('q-pin-upper', env_probe(OKP, vreq={**REQP, 'fn_hash': PIN.upper()}, fn_hash=PIN.upper()))
+add('q-pin-short-unechoed', env_probe('envelope/not-covered.json', vreq={**UNP, 'fn_hash': 'abc'}))
+add('q-mesh-port', env_probe('envelope/ok-computed-mesh.json', vreq={**load('envelope/ok-computed-mesh.json')['request'], 'mesh': 'calc.example.net:443'}))
+add('q-mesh-empty-primary', env_probe('envelope/ok-primary.json', vreq={**load('envelope/ok-primary.json')['request'], 'mesh': ''}))
 # ---- trust and mesh
 OC = 'envelope/ok-computed.json'
 ocr = load(OC)['request']

@@ -70,8 +70,12 @@ test('5.5: the fn_hash echo, trust computed against mesh, the new codes; Envelop
   assert.equal(checkEnvelope(c.status, c.input, keysOf(c), noMesh).code, 'OK');
   const u = vector('envelope/not-covered-name-unbound');
   assert.deepEqual([checkEnvelope(404, u.input, [], u.request).code, checkEnvelope(500, '{"outcome":"error","error":"E_NAME_UNBOUND"}', [], u.request).code], ['OK', 'E_ENVELOPE']);
-  // A malformed request description is the caller's error.
-  for (const bad of [{ fn_hash: PIN.toUpperCase() }, { fn_hash: 5 }, { mesh: 'Mesh.example' }, { mesh: 'mesh.example:443' }, { mesh: '' }, { slice_id: PIN }]) {
+  // A request description of the wrong shape is the caller's error. The pin and the host asked
+  // are compared as given (the reference tool does not reject them; DEFECTS.md 52): a malformed
+  // pin is never echoed, and a malformed mesh never names the signer.
+  for (const m of ['Mesh.example', 'calc.example.net:443', '']) assert.equal(checkEnvelope(c.status, c.input, keysOf(c), { ...c.request, mesh: m }).code, 'E_ENVELOPE', m);
+  assert.equal(checkEnvelope(p.status, p.input, keysOf(p), { ...p.request, fn_hash: PIN.toUpperCase() }).code, 'E_ENVELOPE');
+  for (const bad of [{ fn_hash: 5 }, { mesh: 5 }, { slice_id: PIN }, { x: 1 }]) {
     assert.throws(() => checkEnvelope(404, u.input, [], { ...u.request, ...bad }), TypeError, JSON.stringify(bad));
   }
 });
