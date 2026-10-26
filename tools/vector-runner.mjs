@@ -18,7 +18,8 @@ export const OUTPUTS = {
   keys: ['key_ids'],
   receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked', 'code'], // blob_checked only with blob_hex; code only with success at level signed (E_EVAL_UNAVAILABLE or E_INPUT_SUPERSEDED)
   unit: ['unit'],
-  envelope: ['outcome', 'trust', 'receipt_hash'], // trust and receipt_hash only with a receipt
+  envelope: ['outcome', 'trust', 'receipt_hash', 'results'], // trust and receipt_hash only with a receipt; results for a slice page (5.6)
+  batch: ['results', 'outcome'], // results for a 200 batch, outcome for a refusal (5.7)
   slice: ['canonical', 'sha256', 'slice_id', 'members_hash', 'entry'], // members_hash and entry only for a manifest
   mesh: ['bindings', 'endpoints'],
 };
@@ -37,12 +38,12 @@ export function expected(v) {
 
 /**
  * Vector kinds this runner does not run (CONTRACT-0.4.0-libs.md item 9; SPEC 11): `formula`,
- * `formula-eval`, `excel` and `decimal` are for formula evaluators, and a verifier library has
+ * `formula-eval`, `excel`, `decimal` and (since spec-0.4.2) `call` are for formula evaluators, and a verifier library has
  * none (SPEC 10.1: evaluation comes from the resolver). For such a vector the runner writes
  * exactly `{"id", "error": null, "skipped": "<kind>"}` (SPEC 11, crosscheck/README.md) and the
  * conformance check counts it as skipped.
  */
-export const SKIPPED_KINDS = ['formula', 'formula-eval', 'excel', 'decimal'];
+export const SKIPPED_KINDS = ['formula', 'formula-eval', 'excel', 'decimal', 'call'];
 
 const canonicalJson = (x) => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
 
@@ -181,6 +182,14 @@ export function makeRunner(lib, sha256) {
           break;
         }
         case 'envelope': {
+          if (v.request && Object.prototype.hasOwnProperty.call(v.request, 'slice_id')) {
+            // A page of the slice endpoint (5.6), or another answer there.
+            const res = lib.checkSlicePage(v.status, inputOf(v), receiptKeys(lib, v), v.request);
+            if (!res.ok) return { id: v.id, error: res.code };
+            out.outcome = res.outcome;
+            if (res.page) out.results = res.page.members.map((m) => ({ outcome: m.outcome, receipt_hash: m.receiptHash, trust: m.trust }));
+            break;
+          }
           const res = lib.checkEnvelope(v.status, inputOf(v), receiptKeys(lib, v), v.request);
           if (!res.ok) return { id: v.id, error: res.code };
           out.outcome = res.outcome;
@@ -196,6 +205,20 @@ export function makeRunner(lib, sha256) {
           if (!r.ok) return { id: v.id, error: r.code };
           out.bindings = r.bindings;
           out.endpoints = r.endpoints;
+          break;
+        }
+        case 'batch': {
+          // A /cells response (5.7): per-item results for a 200 batch, or a refusal's outcome.
+          const res = lib.checkBatch(v.status, inputOf(v), receiptKeys(lib, v), v.requests);
+          if (!res.ok) return { id: v.id, error: res.code };
+          if (res.items) {
+            out.results = res.items.map((it) => {
+              if (!it.ok) return { error: it.code };
+              const r = { outcome: it.outcome };
+              if (it.receiptHash !== null) Object.assign(r, { receipt_hash: it.receiptHash, trust: it.trust });
+              return r;
+            });
+          } else out.outcome = res.outcome;
           break;
         }
         case 'slice': {

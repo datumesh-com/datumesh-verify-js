@@ -13,14 +13,14 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The package records spec-0.4.1; the spec submodule must be that revision: the commit the
-# spec-0.4.1 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
+# The package records spec-0.4.2; the spec submodule must be that revision: the commit the
+# spec-0.4.2 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  3f79313*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.1)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.1 (3f79313)"; exit 1 ;;
+  810761d*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.2)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.2 (810761d)"; exit 1 ;;
 esac
-grep -q '"spec": "spec-0.4.1"' package.json
+grep -q '"spec": "spec-0.4.2"' package.json
 
 echo "== npm pack (in node:18-slim)"
 docker run --rm -v "$ROOT":/src:ro -v "$WORK":/out node:18-slim sh -ec '
@@ -68,7 +68,7 @@ docker run --rm -v "$WORK":/pkg:ro node:18-slim sh -ec '
   mkdir /app && cd /app && npm init -y >/dev/null
   npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz typescript@5.9.3
   cat > esm.mts <<TS
-import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, sliceId, membersHash, sliceEntry, resolveMesh, type MeshResult, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult, type Recompute } from "@datumesh/verify";
+import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, sliceId, membersHash, sliceEntry, resolveMesh, type MeshResult, checkBatch, checkSlicePage, type BatchResult, type SlicePageResult, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult, type Recompute } from "@datumesh/verify";
 const k: KeysResult = keysFromResponse("rates.example.org", 404);
 const r: VerifyResult = verify("{}", k, null, new Uint8Array([1]));
 const code: string = r.code;
@@ -83,7 +83,11 @@ const ids: string[] = env.ok ? [] : [sliceId("{}"), membersHash([]), sliceEntry(
 const job: string | null = env.pending ? env.pending.job : null;
 const m: MeshResult = resolveMesh("mesh.example.org", { keys: { status: 404 }, mesh: { status: null } });
 const eps: Record<string, string> | null = m.endpoints;
-console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e, fault, rc, ids, job, m.code, eps);
+const pin: string | null = env.fnHash;
+const b: BatchResult = checkBatch(429, "{}", k, [{ cell_id: "00".repeat(32), fn_hash: "11".repeat(32), mesh: "mesh.example.org" }]);
+const items: EnvelopeResult[] | null = b.items;
+const sp: SlicePageResult = checkSlicePage(404, "{}", k, { slice_id: "00".repeat(32), after: { d: { type: "date", value: "2024-01-01" } } });
+console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e, fault, rc, ids, job, m.code, eps, pin, items, sp.page);
 TS
   cat > cjs.cts <<TS
 import lib = require("@datumesh/verify");

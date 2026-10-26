@@ -12,15 +12,17 @@ import { loadVectors } from './helpers.mjs';
 const vectors = loadVectors();
 const applicable = vectors.filter((v) => !SKIPPED_KINDS.includes(v.kind));
 
-test('the vector set is complete (1037 vectors at spec-0.4.1: 491 for verifier libraries, 546 formula-evaluator vectors)', () => {
-  assert.equal(vectors.length, 1037);
+test('the vector set is complete (1129 vectors at spec-0.4.2: 555 for verifier libraries, 574 formula-evaluator vectors)', () => {
+  assert.equal(vectors.length, 1129);
   const kinds = new Set(vectors.map((v) => v.kind));
-  assert.deepEqual([...kinds].sort(), ['cell', 'decimal', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'mesh', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
-  assert.deepEqual([...SKIPPED_KINDS].sort(), ['decimal', 'excel', 'formula', 'formula-eval']);
-  assert.equal(applicable.length, 491);
+  assert.deepEqual([...kinds].sort(), ['batch', 'call', 'cell', 'decimal', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'mesh', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
+  assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
+  assert.equal(applicable.length, 555);
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.1: the kind mesh, 3 valid and 17 invalid, and 10 more (2 valid) at 3f79313.
-  assert.deepEqual([count('mesh', true), count('mesh', false)], [5, 25]);
+  assert.deepEqual([count('mesh', true), count('mesh', false)], [6, 26]); // spec-0.4.2: + versions (1, 1)
+  // SPEC 14 spec-0.4.2: the kinds batch (5, 6) and call (10, 17).
+  assert.deepEqual([count('batch', true), count('batch', false), count('call', true), count('call', false)], [5, 6, 10, 17]);
   // Since 3f79313 the valid mesh vectors carry their outputs.
   for (const v of vectors.filter((x) => x.kind === 'mesh' && x.valid)) assert.ok(v.bindings !== undefined && v.endpoints !== undefined, v.id);
   // SPEC 14 spec-0.4.0: 18 slice vectors (11 valid, 7 invalid), 30 slice-lineage receipts (13, 17).
@@ -39,7 +41,7 @@ test('a skipped vector\'s line is exactly {"id", "error": null, "skipped": "<kin
     assert.deepEqual(got, { id: v.id, error: null, skipped: v.kind }, v.id);
     kinds.add(v.kind);
   }
-  assert.deepEqual([...kinds].sort(), ['decimal', 'excel', 'formula', 'formula-eval']);
+  assert.deepEqual([...kinds].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
 });
 
 for (const build of ['esm', 'cjs']) {
