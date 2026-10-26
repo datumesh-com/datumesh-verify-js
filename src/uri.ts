@@ -16,6 +16,8 @@ export interface CellRef {
   args: Record<string, TypedScalar | '*'>;
   fn: string;
   ns: string;
+  /** Since spec-0.4.2: the function the reference is pinned to (4.3, 5.1). */
+  fn_hash?: string;
   asof?: string;
 }
 
@@ -131,12 +133,21 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
   // repetition (E_CANON_ARG_DUPLICATE); otherwise an asof anywhere is out of place
   // (E_CANON_ARG_ORDER). SPEC 5.2 does not say which applies when both do; this matches the
   // reference tool (DEFECTS.md).
+  // Since spec-0.4.2 the pin: if the last remaining parameter (after an asof parameter) is named
+  // fn_hash, it is the pin; any other fn_hash is a repetition when there is a pin, else out of place.
   let prev: string | null = null;
   const lastIsAsof = params.length > 0 && params[params.length - 1].name === 'asof';
+  const pinIndex = params.length - (lastIsAsof ? 2 : 1);
+  const hasPin = pinIndex >= 0 && params[pinIndex].name === 'fn_hash';
   params.forEach((p, i) => {
     if (p.name === 'asof') {
       if (!lastIsAsof) fail('E_CANON_ARG_ORDER', 'asof appears once, as the last parameter', at(p.name));
       if (i !== params.length - 1) fail('E_CANON_ARG_DUPLICATE', 'asof repeated', at(p.name));
+      return;
+    }
+    if (p.name === 'fn_hash') {
+      if (!hasPin) fail('E_CANON_ARG_ORDER', 'fn_hash appears once, after the arguments and before asof', at(p.name));
+      if (i !== pinIndex) fail('E_CANON_ARG_DUPLICATE', 'fn_hash repeated', at(p.name));
       return;
     }
     checkArgName(p.name, at(p.name));
@@ -144,7 +155,7 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
     if (prev !== null && p.name < prev) fail('E_CANON_ARG_ORDER', 'arguments must be sorted by name', at(p.name));
     prev = p.name;
   });
-  const argParams = params.filter((p) => p.name !== 'asof');
+  const argParams = params.filter((p) => p.name !== 'asof' && p.name !== 'fn_hash');
 
   // 4. Argument count.
   if (argParams.length > LIMITS.args) fail('E_CANON_LIMIT', `more than ${LIMITS.args} arguments`, 'uri.query');
@@ -179,8 +190,14 @@ export function parseUri(uri: string, signature: Signature | unknown): CellRef {
     }
   }
 
-  // 7. asof.
+  // 7. The pin: 64 lowercase hex digits, as written (E_CANON_HEX; `*` included).
   const ref: CellRef = { args, fn, ns };
+  if (hasPin) {
+    const h = params[pinIndex].value;
+    if (!/^[0-9a-f]{64}$/.test(h)) fail('E_CANON_HEX', 'the pin fn_hash= is 64 lowercase hex digits', at('fn_hash'));
+    ref.fn_hash = h;
+  }
+  // 8. asof.
   const asofParam = params.find((p) => p.name === 'asof');
   if (asofParam) {
     const s = decodeValue(asofParam.value, at('asof'));
@@ -203,6 +220,7 @@ export function formatUri(ref: CellRef | unknown): string {
     else if (isObject(a) && typeof a.value === 'boolean') parts.push(`${k}=${a.value ? 'true' : 'false'}`);
     else parts.push(`${k}=${encodeValue((a as JsonObject).value as string)}`);
   }
+  if (typeof o.fn_hash === 'string') parts.push(`fn_hash=${o.fn_hash}`);
   if (typeof o.asof === 'string') parts.push(`asof=${encodeValue(o.asof)}`);
   return `${SCHEME}${o.ns as string}/${o.fn as string}${parts.length ? `?${parts.join('&')}` : ''}`;
 }

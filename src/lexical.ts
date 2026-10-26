@@ -38,10 +38,10 @@ export function checkName(s: string, path: string, code: 'E_CANON_NAME' | 'E_CAN
   if (s.length > LIMITS.name) fail('E_CANON_LIMIT', `name longer than ${LIMITS.name} characters`, path);
 }
 
-/** SPEC 2.4: a name that is not `asof` and does not start with `dm_`. */
+/** SPEC 2.4: a name that is not `asof`, not `fn_hash` (since spec-0.4.2) and does not start with `dm_`. */
 export function checkArgName(s: string, path: string): void {
   checkName(s, path, 'E_CANON_ARG_NAME');
-  if (s === 'asof' || s.startsWith('dm_')) fail('E_CANON_ARG_NAME', `reserved argument name ${JSON.stringify(s)}`, path);
+  if (s === 'asof' || s === 'fn_hash' || s.startsWith('dm_')) fail('E_CANON_ARG_NAME', `reserved argument name ${JSON.stringify(s)}`, path);
 }
 
 /** SPEC 2.1. Every failure is E_CANON_NAME. */

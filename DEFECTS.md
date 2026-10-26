@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.2` (entries 51-55), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -18,6 +18,85 @@ Where SPEC.md is silent or ambiguous, I follow the reference tool. Every vector 
 Each entry is marked as a **conflict** (prose and reference tool disagree, or prose and a vector
 disagree), a **gap** (the prose does not decide the question), or **underspecified** (the rule
 exists but its exact form had to be inferred).
+
+---
+
+# spec-0.4.2
+
+`spec-0.4.2` (spec commit `810761d`, 1129 vectors; 555 for a verifier library, 574 for formula
+evaluators, now including the kind `call`) adds pinning by function hash, trust `computed` and the
+request's `mesh`, slice pages (5.6), batches (5.7), the `versions` endpoint, `E_SLICE_AT_CELL` and
+`E_NAME_UNBOUND`, and reserves `fn_hash` as an argument name. Worked from the diff of `SPEC.md`,
+`units.md`, `schemas/` and `vectors/` between `3f79313` and `810761d` and the cross-check README;
+the reference tool was run as a black box over 128 probes (`tools/oracle-diff/probes_0_4_2.py`;
+verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the library).
+
+| Change | Library change |
+|---|---|
+| `fn_hash` reserved (2.4) | `E_CANON_ARG_NAME` wherever argument names are checked (descriptors, cells, references, URIs, slices) |
+| Pins (4.3, 5.1, 5.4) | `CellRef.fn_hash`; `parseUri` reads the pin (after the arguments, before `asof`; `E_CANON_ARG_ORDER`, `E_CANON_ARG_DUPLICATE`, `E_CANON_HEX` as 5.4 orders them); `formatUri` writes it before `&asof=`; `canonicalize(ref)` accepts it |
+| Envelope (5.5) | optional `fn_hash` on every outcome but `pending` (`EnvelopeResult.fnHash`), the echo rules; `not_covered` `error` = `E_NAME_UNBOUND` only, never with `fault`; `bad_request` gains `E_CANON_HEX` and `E_SLICE_AT_CELL`; `error` excludes the four client/request codes; trust `computed`; `pending`'s echoed `request` may carry `fn_hash` |
+| Request description (5.5) | `fn_hash` (the pin) and `mesh` (the host asked): `computed` / `verified` / `unverified` against the signer, and `poll` on `mesh` |
+| Slice pages (5.6) | `checkSlicePage(status, body, keys, {slice_id, asof?, fn_hash?, mesh?, after?})` → `SlicePageResult` with `page = {slice, members, next}` |
+| Batches (5.7) | `checkBatch(status, body, keys, requests)` → `BatchResult` with `items` (per-item results in place) or the refusal's `outcome` |
+| Mesh document (9.6) | `versions` is a known optional endpoint with exactly `{cell}`. The versions response (9.8) has no check in the library: it is unsigned, and an importer verifies each listed receipt with `verify` and compares its cell (9.8 says exactly that); a shape check would add no assurance |
+| Codes (10.2) | `E_SLICE_AT_CELL`, `E_NAME_UNBOUND` after `E_MESH_DOC` (48 codes) |
+
+## 51. Gap: comparing a member's key with `after` of another type, and an `after` of other names (5.6)
+
+- **Problem.** 5.6 defines `after` as "an object from each open argument's name to the member's
+  typed scalar", and keys compare "each in its type's order". It does not say what happens when
+  `after` names other arguments than the slice's open ones, or holds a scalar of another type
+  than the member's argument.
+- **Resolution (the reference tool, probed).** Other names, or none (`{}`), are `E_ENVELOPE` for the
+  page, not the caller's error. A scalar of another type is compared without error (the reference
+  accepted `after: {quote: date 2024-01-01}` before string members). The library compares in the
+  member's type order when the types agree, and by code points of the lexical forms otherwise.
+- **Proposed wording (5.6).** "`after` names exactly the slice's open arguments, each with a typed
+  scalar of that argument's type; otherwise the page fails (`E_ENVELOPE`)."
+
+## 52. Gap: a malformed pin or mesh in the request description (5.5)
+
+- **Problem.** 5.5 makes a malformed `cell_id` or `asof` the caller's error, and says `mesh` is a DNS
+  name, but not what a malformed `fn_hash` or `mesh` is.
+- **Resolution (the reference tool, probed).** Both are compared as given: an uppercase pin is
+  never echoed (`E_ENVELOPE`), and `mesh` `calc.example.net:443`, `CALC.example.net` or `""` never
+  names a signer (`computed` fails; a primary receipt passes). The library does the same; only a
+  non-string is a `TypeError`.
+- **Proposed wording.** "The pin and `mesh` of a request description are compared as given; a
+  library need not check their form."
+
+## 53. Gap: where the echo is checked (5.5 steps 2-5)
+
+- **Problem.** The `fn_hash` rules are stated as member rules (step 2) and in step 5 without an
+  order relative to step 4 (the receipt's verification) and the cell binding.
+- **Resolution (the reference tool, probed).** The echo of a pin (present and equal, or absent where
+  allowed) is checked right after step 3, before the receipt is verified; the echo's agreement
+  with the receipt's `cell.fn_hash` after the receipt's cell and `asof` are bound (an unpinned
+  answer with another `fn_hash` and a bad signature is `E_SIGNATURE`; with another cell, the
+  cell's `E_ENVELOPE` at `$.receipt.cell`).
+- **Proposed wording (5.5).** "Check the echo of a pin after step 3; check that `fn_hash` equals the
+  receipt's `cell.fn_hash` in step 5, after the cell and `asof`."
+
+## 54. Underspecified: the order of a page's checks (5.6)
+
+- **Problem.** 5.6's three numbered checks read as three passes (every member's members, then the
+  slice and `next`, then every member's receipt), but the reference checks the page's own members,
+  status, the pin's echo, the slice id and `next` first, then each member completely (its members,
+  receipt, echo, membership, `asof`, trust, key order) before the next: a bad signature on member 0
+  is reported before a stray member on member 1.
+- **Resolution.** As the reference tool. A `stale` or `pending` answer is `E_ENVELOPE`.
+- **Proposed wording (5.6).** "First the page: its members, its status, the echo, `slice` and
+  `next`. Then each member in order, completely: its members, its receipt, its cell, its `asof`,
+  `trust`, its key."
+
+## 55. Note: batch item numbers and statuses keep their text rules (5.7)
+
+- **Observation.** An item's `status` is an integer written without fraction or exponent
+  (`200.0` and `2e2` are `E_ENVELOPE` for the whole batch), and the integer members inside an
+  item's envelope (`age_seconds`...) keep their text rule (an item with `age_seconds: 1.0` fails
+  in its place), as the reference tool does. 5.7 says "an integer 100-599"; the text rule could
+  be named there.
 
 ---
 

@@ -67,7 +67,7 @@ function structArgs(v: JsonValue, path: string): void {
 
 function structCell(v: JsonValue, path: string, ref: boolean): void {
   const o = expectObject(v, path);
-  if (ref) members(o, ['args', 'fn', 'ns'], ['asof'], path);
+  if (ref) members(o, ['args', 'fn', 'ns'], ['asof', 'fn_hash'], path); // fn_hash: a pinned reference (4.3, since spec-0.4.2)
   else members(o, ['args', 'fn', 'fn_hash', 'ns'], [], path);
   for (const k of sortedKeys(o)) {
     if (k === 'args') structArgs(o.args, memberPath(path, 'args'));

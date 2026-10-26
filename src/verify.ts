@@ -259,7 +259,7 @@ function recompute(receipt: JsonObject, rc: Recompute, sources: Sources): 'recom
  * the range's type and within it (inclusive, in the type's order), any value for an open
  * argument. A version slice: the same cell, with a tx in [from, to].
  */
-function memberOf(slice: JsonObject, version: boolean, r: JsonObject): boolean {
+export function memberOf(slice: JsonObject, version: boolean, r: JsonObject): boolean {
   const mc = r.cell as JsonObject;
   if (version) {
     const tx = r.tx as string;

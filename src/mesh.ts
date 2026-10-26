@@ -43,6 +43,7 @@ export const MESH_ENDPOINTS: Readonly<Record<string, { placeholders: readonly st
   receipt: { placeholders: ['hash'], required: true },
   slice: { placeholders: ['cell'], required: false },
   verify: { placeholders: [], required: false },
+  versions: { placeholders: ['cell'], required: false }, // since spec-0.4.2 (9.8)
 };
 
 class MeshFail extends Error {
