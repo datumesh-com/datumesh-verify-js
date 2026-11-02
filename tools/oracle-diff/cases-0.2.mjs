@@ -150,9 +150,12 @@ for (let i = 0; i < N; i++) {
   }
   let request = v.request;
   const q = rand(12);
-  if (q === 0) request = { cell_id: 'e920bb15287699a37973578621cd346a7411270ad08cf1cbd3cbaaa5096aa608' };
-  else if (q === 1) request = { cell_id: v.request.cell_id, asof: '2024-03-17T09:00:00.000000Z' };
-  else if (q === 2) request = { cell_id: v.request.cell_id };
+  // A slice-endpoint request (spec-0.4.2) keeps its slice_id: a request description without
+  // cell_id or slice_id is the caller's error, not a mesh's answer to judge.
+  const idKey = 'slice_id' in v.request ? 'slice_id' : 'cell_id';
+  if (q === 0) request = { [idKey]: 'e920bb15287699a37973578621cd346a7411270ad08cf1cbd3cbaaa5096aa608' };
+  else if (q === 1) request = { [idKey]: v.request[idKey], asof: '2024-03-17T09:00:00.000000Z' };
+  else if (q === 2) request = { [idKey]: v.request[idKey] };
   add({ kind: 'envelope', input: JSON.stringify(body), status, keys: v.keys, request });
 }
 for (const v of envBases) {
