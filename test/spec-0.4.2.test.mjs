@@ -95,6 +95,18 @@ test('5.6 checkSlicePage: per-member results; refusals as envelopes; malformed r
   }
 });
 
+test('5.6 at a468606: a cursor is compared on the open arguments only; a missing one or another key type is E_ENVELOPE', () => {
+  const v = vector('envelope/slice-after');
+  const ks = keysOf(v);
+  const at = (after) => checkSlicePage(v.status, v.input, ks, { ...v.request, after }).code;
+  const q = v.request.after.quote;
+  assert.equal(at({ ...v.request.after, zz: { type: 'date', value: '2024-01-01' } }), 'OK');
+  assert.equal(at({ base: { type: 'string', value: 'EUR' } }), 'E_ENVELOPE');
+  assert.equal(at({}), 'E_ENVELOPE');
+  for (const t of [{ type: 'number', value: '1' }, { type: 'date', value: '2024-01-01' }, { type: 'boolean', value: true }]) assert.equal(at({ quote: t }), 'E_ENVELOPE', JSON.stringify(t));
+  assert.equal(at({ quote: q }), 'OK');
+});
+
 test('5.7 checkBatch: whole-batch checks, then items in place; a refusal is one envelope', () => {
   const v = vector('batch/item-failures');
   const r = checkBatch(v.status, v.input, keysOf(v), v.requests);
