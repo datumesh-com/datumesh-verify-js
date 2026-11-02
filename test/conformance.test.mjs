@@ -12,12 +12,12 @@ import { loadVectors } from './helpers.mjs';
 const vectors = loadVectors();
 const applicable = vectors.filter((v) => !SKIPPED_KINDS.includes(v.kind));
 
-test('the vector set is complete (1145 vectors at spec-0.4.2 a468606: 560 for verifier libraries, 585 formula-evaluator vectors)', () => {
-  assert.equal(vectors.length, 1145);
+test('the vector set is complete (1146 vectors at spec-0.4.2 fc870ab: 561 for verifier libraries, 585 formula-evaluator vectors)', () => {
+  assert.equal(vectors.length, 1146);
   const kinds = new Set(vectors.map((v) => v.kind));
   assert.deepEqual([...kinds].sort(), ['batch', 'call', 'cell', 'decimal', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'mesh', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
-  assert.equal(applicable.length, 560);
+  assert.equal(applicable.length, 561);
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.1: the kind mesh, 3 valid and 17 invalid, and 10 more (2 valid) at 3f79313.
   assert.deepEqual([count('mesh', true), count('mesh', false)], [6, 26]); // spec-0.4.2: + versions (1, 1)

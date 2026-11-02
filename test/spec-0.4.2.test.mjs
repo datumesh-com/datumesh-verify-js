@@ -70,11 +70,12 @@ test('5.5: the fn_hash echo, trust computed against mesh, the new codes; Envelop
   assert.equal(checkEnvelope(c.status, c.input, keysOf(c), noMesh).code, 'OK');
   const u = vector('envelope/not-covered-name-unbound');
   assert.deepEqual([checkEnvelope(404, u.input, [], u.request).code, checkEnvelope(500, '{"outcome":"error","error":"E_NAME_UNBOUND"}', [], u.request).code], ['OK', 'E_ENVELOPE']);
-  // A request description of the wrong shape is the caller's error. The pin and the host asked
-  // are compared as given (the reference tool does not reject them; DEFECTS.md 52): a malformed
-  // pin is never echoed, and a malformed mesh never names the signer.
-  for (const m of ['Mesh.example', 'calc.example.net:443', '']) assert.equal(checkEnvelope(c.status, c.input, keysOf(c), { ...c.request, mesh: m }).code, 'E_ENVELOPE', m);
-  assert.equal(checkEnvelope(p.status, p.input, keysOf(p), { ...p.request, fn_hash: PIN.toUpperCase() }).code, 'E_ENVELOPE');
+  // Since fc870ab every malformed member of a request description is the caller's error, never
+  // compared as given (5.5): a pin that is not 64 lowercase hex, a mesh that is not a DNS name,
+  // a malformed job, a member the description does not have; before the envelope is looked at.
+  for (const bad of [{ fn_hash: PIN.toUpperCase() }, { fn_hash: 'abc' }, { fn_hash: 5 }, { mesh: 'Mesh.example' }, { mesh: 'calc.example.net:443' }, { mesh: '' }, { mesh: 5 }, { job: 'A'.repeat(32) }, { slice_id: PIN }, { after: {} }, { x: 1 }]) {
+    assert.throws(() => checkEnvelope(c.status, '{', keysOf(c), { ...c.request, ...bad }), TypeError, JSON.stringify(bad));
+  }
   for (const bad of [{ fn_hash: 5 }, { mesh: 5 }, { slice_id: PIN }, { x: 1 }]) {
     assert.throws(() => checkEnvelope(404, u.input, [], { ...u.request, ...bad }), TypeError, JSON.stringify(bad));
   }
@@ -90,7 +91,9 @@ test('5.6 checkSlicePage: per-member results; refusals as envelopes; malformed r
   const nc = vector('envelope/slice-not-covered');
   const x = checkSlicePage(nc.status, nc.input, [], nc.request);
   assert.deepEqual([x.ok, x.outcome, x.page], [true, 'not_covered', null]);
-  for (const bad of [{ slice_id: 'x' }, { after: 5 }, { after: { quote: 'GBP' } }, { cell_id: PIN }, { job: 'a'.repeat(32) }]) {
+  // fc870ab: a cursor whose values are not typed scalars (4.1, section 3), a malformed pin or
+  // mesh, a missing slice_id: the caller's error, before the body.
+  for (const bad of [{ slice_id: 'x' }, { after: 5 }, { after: { quote: 'GBP' } }, { after: { quote: { type: 'number', value: '01' } } }, { after: { quote: { type: 'money', value: '1' } } }, { after: { quote: { type: 'string', value: 'GBP', x: 1 } } }, { fn_hash: 'abc' }, { mesh: 'Mesh.example' }, { cell_id: PIN }, { job: 'a'.repeat(32) }]) {
     assert.throws(() => checkSlicePage(v.status, v.input, keysOf(v), { ...v.request, ...bad }), TypeError, JSON.stringify(bad));
   }
 });
@@ -120,6 +123,9 @@ test('5.7 checkBatch: whole-batch checks, then items in place; a refusal is one 
   assert.deepEqual([rs.ok, rs.code, rs.items], [false, 'E_ENVELOPE', null]);
   assert.throws(() => checkBatch(200, '[]', [], 'x'), TypeError);
   assert.throws(() => checkBatch(200, '[]', [], [{ cell_id: 'x' }]), TypeError);
+  // Every description is checked before the body (fc870ab): even an unparseable body.
+  assert.throws(() => checkBatch(200, '[', [], [v.requests[0], { ...v.requests[1], mesh: 'X.example' }]), TypeError);
+  assert.throws(() => checkBatch(200, '[', [], [v.requests[0], {}]), TypeError);
 });
 
 test('9.6: versions is an optional known endpoint with exactly {cell}', () => {
