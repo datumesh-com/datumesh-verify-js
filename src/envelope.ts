@@ -2,7 +2,7 @@
 // Synchronous, offline; the embedded receipt is verified through step 6 with the given keys.
 import { DatumeshError, ERROR_CODES, type ErrorCode } from './errors.js';
 import { has, isObject, memberPath, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
-import { LIMITS, URL_RE, checkDnsName, checkNumber, checkString, compareCodePoints, compareValues, isHex, isInstant } from './lexical.js';
+import { LIMITS, URL_RE, checkDnsName, checkNumber, checkString, compareValues, isHex, isInstant } from './lexical.js';
 import { sha256Hex } from './hash.js';
 import { jcsBytes } from './jcs.js';
 import { collectSources, type Sources } from './keys.js';
@@ -346,16 +346,17 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   const echo = has(env, 'fn_hash') ? (env.fn_hash as string) : null;
   // The echo of a pin (since spec-0.4.2): required and equal, except rate_limited and bad_request
   // (equal when present) and pending (whose request echoes it).
+  // Step 3a (spec-0.4.2): what the request decides without the receipt, in this order:
+  // E_JOB_UNKNOWN only at a job URL; the pin echo; the pending echo, job and poll host.
+  if (outcome === 'bad_request' && env.error === 'E_JOB_UNKNOWN' && request?.job === undefined) {
+    return failed('E_ENVELOPE', 'E_JOB_UNKNOWN answers a job URL only, and this request was not one', '$.error');
+  }
   const pin = request?.fn_hash;
   if (pin !== undefined && outcome !== 'pending') {
     if (echo === null && outcome !== 'rate_limited' && outcome !== 'bad_request') return failed('E_ENVELOPE', 'an envelope answering a pinned request echoes its fn_hash', '$.fn_hash');
     if (echo !== null && echo !== pin) return failed('E_ENVELOPE', 'fn_hash echoes another function than the one pinned', '$.fn_hash');
   }
   if (!has(env, 'receipt')) {
-    // Step 5 for outcomes without a receipt (since spec-0.4.1).
-    if (outcome === 'bad_request' && env.error === 'E_JOB_UNKNOWN' && request?.job === undefined) {
-      return failed('E_ENVELOPE', 'E_JOB_UNKNOWN answers a job URL only, and this request was not one', '$.error');
-    }
     let pending: Pending | null = null;
     if (outcome === 'pending') {
       if (request === null || request.cell_id === undefined) return failed('E_ENVELOPE', 'pending does not answer this request', '$.outcome');
@@ -395,11 +396,11 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   if (request?.asof !== undefined && !(asof <= request.asof)) {
     return failed('E_ENVELOPE', `the receipt answers asof ${asof}, later than the requested ${request.asof}`, '$.receipt.asof', r.hash);
   }
-  if (echo !== null && echo !== cell.fn_hash) return failed('E_ENVELOPE', "fn_hash echoes another function than the receipt's", '$.fn_hash', r.hash);
-  // Step 6.
+  // Step 6: trust; then the echo against the receipt's cell.fn_hash; then superseded_by.
   const trust = env.trust as Trust;
   const problem = trustProblem(trust, r.receipt, request?.mesh);
   if (problem !== null) return failed('E_ENVELOPE', problem, '$.trust', r.hash);
+  if (echo !== null && echo !== cell.fn_hash) return failed('E_ENVELOPE', "fn_hash echoes another function than the receipt's", '$.fn_hash', r.hash);
   if (env.superseded_by === r.hash) return failed('E_ENVELOPE', 'superseded_by is the receipt itself', '$.superseded_by', r.hash);
   return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo };
 }
@@ -481,19 +482,17 @@ export interface SlicePageResult extends EnvelopeResult {
 
 const asPage = (r: EnvelopeResult, page: SlicePage | null = null): SlicePageResult => ({ ...r, page });
 
-/** Compare two typed scalars of one key position in the member's type order (DEFECTS.md 51). */
-function compareKeyValue(m: JsonObject, x: JsonObject): number {
-  const t = m.type as string;
-  if (t === 'boolean') return Number(m.value === true) - Number(x.value === true);
-  const a = String(m.value);
-  const b = String(x.value);
-  if (x.type === t) return compareValues(t, a, b);
-  return compareCodePoints(a, b);
-}
-
-function compareKeys(names: string[], a: JsonObject, b: JsonObject): number {
+/**
+ * Compare two keys on the slice's open arguments, each in its type's order (15.13). Null when a
+ * position's types differ: such keys cannot be ordered (SPEC 5.6, since a468606: E_ENVELOPE).
+ */
+function compareKeys(names: string[], a: JsonObject, b: JsonObject): number | null {
   for (const n of names) {
-    const c = compareKeyValue(a[n] as JsonObject, b[n] as JsonObject);
+    const x = a[n] as JsonObject;
+    const y = b[n] as JsonObject;
+    if (x.type !== y.type) return null;
+    const t = x.type as string;
+    const c = t === 'boolean' ? Number(x.value === true) - Number(y.value === true) : compareValues(t, String(x.value), String(y.value));
     if (c !== 0) return c;
   }
   return 0;
@@ -521,8 +520,8 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
   const echo = has(o, 'fn_hash') ? (o.fn_hash as string) : null;
   if (request.fn_hash !== undefined && echo === null) return fail('an envelope answering a pinned request echoes its fn_hash', '$.fn_hash');
   if (request.fn_hash !== undefined && echo !== request.fn_hash) return fail('fn_hash echoes another function than the one pinned', '$.fn_hash');
-  if (echo !== null && echo !== slice.fn_hash) return fail("fn_hash echoes another function than the slice's", '$.fn_hash');
   if (sha256Hex(jcsBytes(slice)) !== request.slice_id) return fail('the page is of another slice than the one requested', '$.slice');
+  if (echo !== null && echo !== slice.fn_hash) return fail("the page's fn_hash MUST equal its slice's", '$.fn_hash');
   try {
     validate(slice, 'slice', '$.slice');
   } catch (e) {
@@ -533,7 +532,9 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
   if (request.mesh !== undefined && has(o, 'next') && urlHost(o.next as string) !== request.mesh) return fail(`next names another host than the mesh asked (${request.mesh})`, '$.next');
   const sargs = slice.args as JsonObject;
   const open = sortedKeys(sargs).filter((k) => sargs[k] === '*' || (isObject(sargs[k]) && !has(sargs[k] as JsonObject, 'value')));
-  if (request.after !== undefined && sortedKeys(request.after).join(',') !== open.join(',')) return fail("after is a key: the slice's open arguments, as typed scalars", 'request.after');
+  // The cursor is compared on the open arguments only; its other names are ignored (a468606).
+  const missing = request.after === undefined ? undefined : open.find((n) => !Object.prototype.hasOwnProperty.call(request.after, n));
+  if (missing !== undefined) return fail(`the cursor lacks the open argument ${JSON.stringify(missing)}`, 'request.after');
   // 3. Each member, in order.
   const out: SliceMember[] = [];
   let prev: JsonObject | null = request.after ? (request.after as unknown as JsonObject) : null;
@@ -556,14 +557,19 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
     }
     const cell = r.receipt.cell as JsonObject;
     const mecho = has(m, 'fn_hash') ? (m.fn_hash as string) : null;
-    if (mecho !== null && mecho !== cell.fn_hash) return fail("fn_hash echoes another function than the receipt's", `${at}.fn_hash`);
     if (!memberOf(slice, false, r.receipt)) return fail('the receipt is not of a cell of the slice', `${at}.receipt.cell`);
     if (request.asof !== undefined && !((r.receipt.asof as string) <= request.asof)) return fail("the receipt's asof is after the one requested", `${at}.receipt.asof`);
+    // trust as in 5.5 step 6: trust, then the member's fn_hash against its receipt, then superseded_by.
     const problem = trustProblem(m.trust as Trust, r.receipt, request.mesh);
     if (problem !== null) return fail(problem, `${at}.trust`);
+    if (mecho !== null && mecho !== cell.fn_hash) return fail("fn_hash echoes another function than the receipt's", `${at}.fn_hash`);
     if (m.superseded_by === r.hash) return fail('superseded_by is the receipt itself', `${at}.superseded_by`);
     const key = cell.args as JsonObject;
-    if (prev !== null && compareKeys(open, key, prev) <= 0) return fail('members are in strictly ascending key order, after the cursor', at);
+    if (prev !== null) {
+      const c = compareKeys(open, key, prev);
+      if (c === null) return fail(i === 0 || prev === request.after ? 'the cursor has another key type than the members' : "the members' keys differ in type", at);
+      if (c <= 0) return fail('members are in strictly ascending key order, after the cursor', at);
+    }
     prev = key;
     out.push({ outcome: m.outcome as 'ok' | 'stale', trust: m.trust as Trust, receiptHash: r.hash, fnHash: mecho, cell });
   }

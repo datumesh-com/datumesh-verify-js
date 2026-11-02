@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.2` (entries 51-55), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 open), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -42,7 +42,21 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
 | Mesh document (9.6) | `versions` is a known optional endpoint with exactly `{cell}`. The versions response (9.8) has no check in the library: it is unsigned, and an importer verifies each listed receipt with `verify` and compares its cell (9.8 says exactly that); a shape check would add no assurance |
 | Codes (10.2) | `E_SLICE_AT_CELL`, `E_NAME_UNBOUND` after `E_MESH_DOC` (48 codes) |
 
-## 51. Gap: comparing a member's key with `after` of another type, and an `after` of other names (5.6)
+## Status at spec `a468606`
+
+Spec commit `a468606` (on top of `810761d`; 16 vectors added, 1145 in all, 560 for a verifier
+library; no `spec-0.4.1` change) settles three of the five entries. The entries' text below is
+kept as written at `810761d`.
+
+| Entry | Status | Settled by, or what is still open | Library change |
+|---|---|---|---|
+| 51 | Resolved | 5.6: "A cursor is compared on the slice's open arguments only, and its other names are ignored; a cursor that lacks one, or whose value has another type than the members' key (or members whose keys differ in type), cannot be ordered against and is `E_ENVELOPE`; a cursor that is not an object at all is a malformed request description, the caller's error" | **Changed:** extra cursor names are ignored (were `E_ENVELOPE`); a cursor value of another type, and members whose keys differ in type, are `E_ENVELOPE` (were compared by code points) |
+| 52 | **Open** | 5.5 still names only a `cell_id` that is not 64 lowercase hex digits and an `asof` that is not an instant as the caller's error. Not stated: a request's `fn_hash` that is not 64 lowercase hex digits, a `mesh` that is not a DNS name (the reference compares both as given), a `job` that is not `[0-9a-f]{32,64}` (the library throws, as for `cell_id`), and a cursor that is an object whose values are not typed scalars (the library throws). | none: pin and `mesh` compared as given; `job` and a cursor of non-scalars are `TypeError` |
+| 53 | Resolved | 5.5 step 3a ("`E_JOB_UNKNOWN` only in the answer to a job URL; the pin echo ...; for `pending`, the echoed `request` ..., its `job` ..., its `poll` ...") and step 6 ("`primary` ..., then ... `computed` ...; then that `fn_hash`, when present, equals the receipt's `cell.fn_hash`; then that `superseded_by` differs") | the checks now run in exactly that order (no result code changes) |
+| 54 | **Open** | 5.6's binding list still reads as three passes ("1. The members of 5.5 and their rules, for the page and for each member" before "2. `slice` hashes ..." and "3. For each member in order: its receipt verified ..."), while the reference checks each member completely before the next: a bad signature on member 0 is reported (`E_SIGNATURE`) before member 1's stray member (`E_ENVELOPE`), probe `s-member-badsig-and-later-shape`, still so at `a468606`. The page's own pin echo (3a-like) is also not placed in the list. | none: as the reference |
+| 55 | Resolved | 5.5 "Integer members": "and since `spec-0.4.2` an item's `status` in a batch (5.7) ... (and `200.0`, `2e2` or `true` as an item's `status`)" | none |
+
+## 51. Gap: comparing a member's key with `after` of another type, and an `after` of other names (5.6) [resolved at a468606]
 
 - **Problem.** 5.6 defines `after` as "an object from each open argument's name to the member's
   typed scalar", and keys compare "each in its type's order". It does not say what happens when
@@ -55,7 +69,7 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
 - **Proposed wording (5.6).** "`after` names exactly the slice's open arguments, each with a typed
   scalar of that argument's type; otherwise the page fails (`E_ENVELOPE`)."
 
-## 52. Gap: a malformed pin or mesh in the request description (5.5)
+## 52. Gap: a malformed pin or mesh in the request description (5.5) [open at a468606]
 
 - **Problem.** 5.5 makes a malformed `cell_id` or `asof` the caller's error, and says `mesh` is a DNS
   name, but not what a malformed `fn_hash` or `mesh` is.
@@ -66,7 +80,7 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
 - **Proposed wording.** "The pin and `mesh` of a request description are compared as given; a
   library need not check their form."
 
-## 53. Gap: where the echo is checked (5.5 steps 2-5)
+## 53. Gap: where the echo is checked (5.5 steps 2-5) [resolved at a468606]
 
 - **Problem.** The `fn_hash` rules are stated as member rules (step 2) and in step 5 without an
   order relative to step 4 (the receipt's verification) and the cell binding.
@@ -78,7 +92,7 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
 - **Proposed wording (5.5).** "Check the echo of a pin after step 3; check that `fn_hash` equals the
   receipt's `cell.fn_hash` in step 5, after the cell and `asof`."
 
-## 54. Underspecified: the order of a page's checks (5.6)
+## 54. Underspecified: the order of a page's checks (5.6) [open at a468606]
 
 - **Problem.** 5.6's three numbered checks read as three passes (every member's members, then the
   slice and `next`, then every member's receipt), but the reference checks the page's own members,
@@ -90,7 +104,7 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
   `next`. Then each member in order, completely: its members, its receipt, its cell, its `asof`,
   `trust`, its key."
 
-## 55. Note: batch item numbers and statuses keep their text rules (5.7)
+## 55. Note: batch item numbers and statuses keep their text rules (5.7) [resolved at a468606]
 
 - **Observation.** An item's `status` is an integer written without fraction or exponent
   (`200.0` and `2e2` are `E_ENVELOPE` for the whole batch), and the integer members inside an
