@@ -1,7 +1,7 @@
 // Response envelopes (SPEC.md 5.5): the unsigned JSON body a mesh returns around a receipt.
 // Synchronous, offline; the embedded receipt is verified through step 6 with the given keys.
 import { DatumeshError, ERROR_CODES, type ErrorCode } from './errors.js';
-import { has, isObject, memberPath, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
+import { has, isObject, memberPath, normalizeValue, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
 import { LIMITS, URL_RE, checkDnsName, checkNumber, checkString, compareValues, isHex, isInstant } from './lexical.js';
 import { sha256Hex } from './hash.js';
 import { jcsBytes } from './jcs.js';
@@ -248,16 +248,23 @@ const isDnsName = (s: string): boolean => {
   }
 };
 
-const isTypedScalar = (v: unknown): boolean => isObject(v) && sortedKeys(v).join(',') === 'type,value' && typeof v.type === 'string' && (typeof v.value === 'string' || typeof v.value === 'boolean');
+/** A typed scalar by 4.1 and section 3 (its type known, its value in that type's lexical form). */
+const isTypedScalar = (v: unknown): boolean => {
+  try {
+    validate(normalizeValue(v, '$'), 'scalar');
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** The request members every request description may carry (SPEC 5.5, 5.6). */
 function checkCommon(request: JsonObject): boolean {
   return (
     (!has(request, 'asof') || (typeof request.asof === 'string' && isInstant(request.asof))) &&
-    // The pin and the host asked are compared as given (DEFECTS.md 52): a malformed pin is never
-    // echoed, a malformed mesh never names a signer or a poll host.
-    (!has(request, 'fn_hash') || typeof request.fn_hash === 'string') &&
-    (!has(request, 'mesh') || typeof request.mesh === 'string')
+    // Since fc870ab a malformed pin or mesh is the caller's error, never compared as given (5.5).
+    (!has(request, 'fn_hash') || (typeof request.fn_hash === 'string' && HEX64.test(request.fn_hash))) &&
+    (!has(request, 'mesh') || (typeof request.mesh === 'string' && isDnsName(request.mesh)))
   );
 }
 
@@ -271,7 +278,7 @@ function checkRequest(request: unknown): void {
     (!has(request, 'job') || (typeof request.job === 'string' && JOB_RE.test(request.job)));
   if (!ok) {
     throw new TypeError(
-      'request must be {cell_id: <64 lowercase hex>, asof?: <instant>, job?: <32-64 lowercase hex>, fn_hash?: <the pin>, mesh?: <the host asked>}: the cell id of the original request (resolved to the fn_hash used), its asof if it had one, the job polled when the body answers a job URL, the pin when it was pinned, and the host asked',
+      'request must be {cell_id: <64 lowercase hex>, asof?: <instant>, job?: <32-64 lowercase hex>, fn_hash?: <64 lowercase hex>, mesh?: <DNS name>}: the cell id of the original request (resolved to the fn_hash used), its asof if it had one, the job polled when the body answers a job URL, the pin when it was pinned, and the host asked',
     );
   }
 }
@@ -286,7 +293,7 @@ function checkSliceRequest(request: unknown): void {
     checkCommon(request) &&
     (!has(request, 'after') || (isObject(request.after) && Object.values(request.after).every(isTypedScalar)));
   if (!ok) {
-    throw new TypeError('a slice request must be {slice_id: <64 lowercase hex>, asof?: <instant>, fn_hash?: <the pin>, mesh?: <the host asked>, after?: {<open argument>: <typed scalar>}}');
+    throw new TypeError('a slice request must be {slice_id: <64 lowercase hex>, asof?: <instant>, fn_hash?: <64 lowercase hex>, mesh?: <DNS name>, after?: {<open argument>: <typed scalar>}}: a malformed member is the caller\'s error (SPEC 5.5)');
   }
 }
 

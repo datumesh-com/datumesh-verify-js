@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 open), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 at `fc870ab`), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -42,6 +42,13 @@ verdicts in `test/fixtures/oracle-probes-0.4.2.jsonl.gz`, all matched by the lib
 | Mesh document (9.6) | `versions` is a known optional endpoint with exactly `{cell}`. The versions response (9.8) has no check in the library: it is unsigned, and an importer verifies each listed receipt with `verify` and compares its cell (9.8 says exactly that); a shape check would add no assurance |
 | Codes (10.2) | `E_SLICE_AT_CELL`, `E_NAME_UNBOUND` after `E_MESH_DOC` (48 codes) |
 
+## Status at spec `fc870ab` (the final `spec-0.4.2` text)
+
+| Entry | Settled by | Library change |
+|---|---|---|
+| 52 | 5.5: "A malformed request description is the caller's error. It is not an `E_*` code: libraries report it the way their language reports a misused function, before looking at the envelope, and never compare a malformed member as given ... Malformed means (since `spec-0.4.2`, completely): a `cell_id` or `slice_id` (5.6) that is not 64 lowercase hex digits, or neither of them; an `asof` that is not an instant; a request `job` that is not 32 to 64 lowercase hex digits; a pin `fn_hash` that is not 64 lowercase hex digits; a `mesh` that is not a DNS name (2.1); a cursor `after` (5.6) that is not an object, or whose values are not typed scalars (4.1, section 3); and a member the description does not have ... A batch's request descriptions (5.7) are checked, all of them, before its body." | **Changed:** a pin that is not 64 lowercase hex digits and a `mesh` that is not a DNS name are now `TypeError` (they were compared as given, giving `E_ENVELOPE` or, for a primary receipt, success); a cursor value must be a typed scalar by section 3 (a known type, a value in its lexical form), not only of that shape. Unknown members, a malformed `job`, `cell_id`/`slice_id` and `asof` were already `TypeError`, and a batch's descriptions were already checked before its body. |
+| 54 | 5.6: "The checks run in this order, and the first failure is reported: the page itself, then **each member completely**, receipt verification included, before the next member", and the rewritten steps 1-3 (`invalid/envelope-slice-member-checks-in-order`) | none: the library already checked in that order |
+
 ## Status at spec `a468606`
 
 Spec commit `a468606` (on top of `810761d`; 16 vectors added, 1145 in all, 560 for a verifier
@@ -69,7 +76,7 @@ kept as written at `810761d`.
 - **Proposed wording (5.6).** "`after` names exactly the slice's open arguments, each with a typed
   scalar of that argument's type; otherwise the page fails (`E_ENVELOPE`)."
 
-## 52. Gap: a malformed pin or mesh in the request description (5.5) [open at a468606]
+## 52. Gap: a malformed pin or mesh in the request description (5.5) [resolved at fc870ab]
 
 - **Problem.** 5.5 makes a malformed `cell_id` or `asof` the caller's error, and says `mesh` is a DNS
   name, but not what a malformed `fn_hash` or `mesh` is.
@@ -92,7 +99,7 @@ kept as written at `810761d`.
 - **Proposed wording (5.5).** "Check the echo of a pin after step 3; check that `fn_hash` equals the
   receipt's `cell.fn_hash` in step 5, after the cell and `asof`."
 
-## 54. Underspecified: the order of a page's checks (5.6) [open at a468606]
+## 54. Underspecified: the order of a page's checks (5.6) [resolved at fc870ab]
 
 - **Problem.** 5.6's three numbered checks read as three passes (every member's members, then the
   slice and `next`, then every member's receipt), but the reference checks the page's own members,
