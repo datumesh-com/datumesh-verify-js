@@ -1,5 +1,5 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.4.2';
+export const SPEC_VERSION = 'spec-0.4.3';
 
 /**
  * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` and
@@ -7,7 +7,9 @@ export const SPEC_VERSION = 'spec-0.4.2';
  * (10.1 step 7.6). Since spec-0.4.1 `E_JOB_UNKNOWN` (a mesh's answer in a `bad_request`
  * envelope at a job URL, 5.5) and `E_MESH_DOC` (a result of cross-mesh resolution, 9.6) are not
  * verification results either, nor (since spec-0.4.2) `E_SLICE_AT_CELL` and `E_NAME_UNBOUND`,
- * a mesh's answers about a request.
+ * a mesh's answers about a request, nor (since spec-0.4.3) `E_FOREIGN_UNAVAILABLE`, a mesh's or
+ * resolver's answer in an `error` envelope (HTTP 502, with `detail`) that a foreign mesh could not
+ * be reached.
  */
 export const ERROR_CODES = [
   'E_PARSE_JSON',
@@ -58,6 +60,7 @@ export const ERROR_CODES = [
   'E_MESH_DOC',
   'E_SLICE_AT_CELL',
   'E_NAME_UNBOUND',
+  'E_FOREIGN_UNAVAILABLE',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

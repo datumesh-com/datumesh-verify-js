@@ -19,6 +19,8 @@ export const LIMITS = {
   keys: 64,
   extent: 4096,
   members: 1048576,
+  declarations: 64,
+  declaration_entries: 16,
 } as const;
 
 export const TYPES = ['blob', 'boolean', 'date', 'instant', 'number', 'string'] as const;

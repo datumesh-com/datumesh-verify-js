@@ -427,4 +427,4 @@ export function verifyEmbedded(receipt: JsonValue, sources: Sources): { receipt:
   return verifySigned(receipt, sources, () => undefined);
 }
 
-export { Stop };
+export { Stop, verifySigned };

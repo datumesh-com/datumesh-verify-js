@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 at `fc870ab`), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.4.3` (entries 56-59, open), `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 at `fc870ab`), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -18,6 +18,81 @@ Where SPEC.md is silent or ambiguous, I follow the reference tool. Every vector 
 Each entry is marked as a **conflict** (prose and reference tool disagree, or prose and a vector
 disagree), a **gap** (the prose does not decide the question), or **underspecified** (the rule
 exists but its exact form had to be inferred).
+
+---
+
+# spec-0.4.3
+
+`spec-0.4.3` (spec commit `99123b2`, 1236 vectors; 651 for a verifier library, 585 for formula
+evaluators) adds licence inheritance (8.5), `declarations` in the key document (9.2), the
+entitlement check (10.3), unrooted namespaces (2.5) and `E_FOREIGN_UNAVAILABLE` (5.5, 10.2). Worked
+from the diff of `SPEC.md`, `units.md`, `schemas/`, `vectors/` and `README.md` between `fc870ab`
+and `99123b2` and the cross-check README; the reference tool was run as a black box over 170
+probes (`tools/oracle-diff/probes_0_4_3.py`; verdicts in
+`test/fixtures/oracle-probes-0.4.3.jsonl.gz`, all matched by the library): 53 key documents, 42
+envelopes and batches, 70 licence and 5 entitlement cases. Nothing in the new text was found
+ambiguous enough to change a result; the entries below are the places where the library had to
+choose what the spec leaves to an implementation.
+
+| Change | Library change |
+|---|---|
+| Declarations (9.2, 4.5) | checked in `keysFromResponse` / `keysFromDocument` (and so in `verify`, `resolveMesh`) after the keys; `KeysResult.declarations` as given; `Declarations`, `DeclarationEntry` |
+| Inheritance (8.5) | `inheritLicence(licences, declarations, fn, issued, meshLicence)` → `{licence, reason}`; `licenceTier`, `LICENCE_TIERS` |
+| Entitlement (10.3) | `checkEntitlement(receipt, inputLicences, keyDocument)` → `{entitled, reason, licence}`; `inputLicences(receipt, receipts, manifests?, keys?)` |
+| Unrooted namespaces (2.5) | `isUnrooted(namespace)` |
+| `E_FOREIGN_UNAVAILABLE` (5.5, 10.2) | appended to `ERROR_CODES` (49 codes); `detail` on `error` envelopes, required with that code and forbidden otherwise (step 2), HTTP 502 (step 3); `EnvelopeResult.foreignDetail`, `ForeignDetail`, `FOREIGN_DETAILS` |
+| Runner (11) | kinds `licence` and `entitlement`; `keys` output `declarations` |
+
+## 56. Library note: the inheritance rule's arguments are checked (8.5, 11)
+
+- **Text.** 8.5: "Licences are compared byte for byte, as 8.1 reads them (it does not check
+  identifiers against the SPDX list)". The rule's inputs come from verified receipts, so they are
+  licences by 8.1; nothing says what a function implementing the rule does with a string that is
+  not one.
+- **Reference tool (black box).** A `licence` vector with the input licence `MIT License` (a space:
+  not a licence by 8.1) is answered `not_declared`: the string is taken as a restricted licence.
+- **Choice.** `inheritLicence` and `checkEntitlement` reject an argument that breaks its grammar:
+  a licence (`E_CANON_LICENCE` or `E_CANON_LIMIT`, by 8.1), `fn` (`E_CANON_NAME`, 2.3), `issued`
+  (`E_CANON_INSTANT`), as `DatumeshError`; arguments of the wrong JS type are `TypeError`. No
+  vector, and no case the cross-check README describes, has a malformed licence, so results agree
+  wherever the inputs are licences. `declarations` passed to `inheritLicence` are only type-checked
+  (the `licence` vectors pass `{}` for none, and 9.2's checks belong to the key document);
+  `checkEntitlement` holds a hand-built `KeysResult`'s declarations to 9.2 (`TypeError`).
+- **Proposed wording (8.5).** "The rule is defined for licences by 8.1; an implementation MAY
+  reject anything else."
+
+## 57. Gap: an input receipt or manifest missing when L is collected (10.3, 11)
+
+- **Text.** 11: a runner "takes L by following the receipt's `inputs` through `receipts` and
+  `manifests`". 10.3: L "as step 7.5 obtains them". Nothing says what happens when one is missing
+  or has another hash.
+- **Reference tool (black box).** A probe without the manifest stops the whole `canon.py check`
+  run with `ValueError: no manifest for slice:...` (so it is not among the fixture's probes).
+- **Choice.** `inputLicences` reports what step 7.5 would: a receipt or manifest not supplied, or
+  one that does not hash to its entry, is `E_INPUT_UNAVAILABLE`; a supplied input receipt that is
+  not a receipt is `E_INPUT_INVALID` (with `keys`, also one whose signature fails, as step 7.5
+  does); a malformed manifest its own code. Declared inputs, membership and times are not checked:
+  that is verification (10.1 step 7.5), which a caller runs first.
+- **Proposed wording (11).** "Every `entitlement` vector supplies every input receipt and manifest;
+  an implementation collecting L reports a missing one as step 7.5 does."
+
+## 58. Library note: L that cannot belong to R (10.3)
+
+- **Text.** 10.3 makes a K of another host the caller's error. L is "the licences of R's input
+  receipts"; a non-empty L for a receipt whose `inputs` is empty cannot be that.
+- **Choice.** `checkEntitlement` throws `TypeError` for it, as for a K of another host. A receipt
+  whose only inputs are empty slices has inputs and an empty L, which is accepted (`no_inputs`).
+  Other mismatches (L of the wrong length for R's inputs) are not detectable without the receipts
+  and are not checked.
+
+## 59. Library note: what `isUnrooted` takes (2.5)
+
+- **Text.** 2.5: "A namespace whose host's last label is `invalid` ... is unrooted"; the contract
+  asks for `is_unrooted(namespace or host)`.
+- **Choice.** `isUnrooted` takes a namespace by 2.3 (a host is one; so is a full function name, a
+  namespace followed by a name), checks it (`E_CANON_NAME` otherwise, `TypeError` for a
+  non-string), and answers whether the last label of its host is `invalid`. `invalid` alone is not
+  a DNS name by 2.1 (one label) and is `E_CANON_NAME`.
 
 ---
 

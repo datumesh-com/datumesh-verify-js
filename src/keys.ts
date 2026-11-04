@@ -2,7 +2,7 @@
 import { DatumeshError, type ErrorCode } from './errors.js';
 import { fromHex, keyIdOf } from './hash.js';
 import { has, isObject, memberPath, sortedKeys, toJson, type JsonValue } from './json.js';
-import { LIMITS, checkDnsName, isHex, isInstant } from './lexical.js';
+import { LIMITS, checkDnsName, checkFunctionName, checkLicence, isHex, isInstant } from './lexical.js';
 
 function isDnsName(s: string): boolean {
   try {
@@ -22,6 +22,20 @@ export interface KeyEntry {
   valid_to?: string;
 }
 
+/**
+ * Since spec-0.4.3: one entry of a key document's `declarations` (SPEC 9.2): the publisher permits
+ * its function to be computed over inputs under `licence` while the entry is open
+ * (`valid_from <= issued < valid_to`; absent `valid_to`, open-ended).
+ */
+export interface DeclarationEntry {
+  licence: string;
+  valid_from: string;
+  valid_to?: string;
+}
+
+/** Since spec-0.4.3: a key document's `declarations`: a full function name under its host to 1-16 entries. */
+export type Declarations = Record<string, DeclarationEntry[]>;
+
 /** The outcome of resolving one host's keys (SPEC 9.3). */
 export interface KeysResult {
   ok: boolean;
@@ -31,6 +45,12 @@ export interface KeysResult {
   detail: string;
   /** The validated keys, in document order, when ok. */
   keys?: KeyEntry[];
+  /**
+   * Since spec-0.4.3: the document's `declarations` (SPEC 9.2), as given (names and entries in
+   * document order), when ok and the document has them; absent otherwise. They change nothing in
+   * verification; `checkEntitlement` reads them.
+   */
+  declarations?: Declarations;
 }
 
 /** A mapping of key id to 64-hex public key: usable for any host, with no validity windows. */
@@ -52,10 +72,59 @@ function bad(msg: string, path: string): never {
   throw new KeyDocError(msg, path);
 }
 
+const ENTRY_MEMBERS = ['licence', 'valid_from', 'valid_to'];
+
+/**
+ * SPEC 9.2 (since spec-0.4.3): `declarations` of a key document for `host`: an object of 1 to 64
+ * full function names (2.3) whose namespace's host is `host` exactly, each mapped to an array of
+ * 1 to 16 entries with exactly `licence` (8.1), `valid_from` and optionally `valid_to` (instants,
+ * `valid_to` later), all strings. Throws KeyDocError; returns a copy, in document order.
+ */
+export function validateDeclarations(d: JsonValue, host: string, path = '$.declarations'): Declarations {
+  if (!isObject(d)) bad('declarations must be an object', path);
+  const names = Object.keys(d);
+  if (names.length < 1 || names.length > LIMITS.declarations) bad(`declarations must have 1 to ${LIMITS.declarations} function names`, path);
+  const out: Declarations = {}; // a function name has a '/', so it is never __proto__
+  for (const name of names) {
+    const p = memberPath(path, name);
+    try {
+      checkFunctionName(name, p);
+    } catch (e) {
+      if (e instanceof DatumeshError) bad(`${JSON.stringify(name)} is not a full function name (${e.code})`, p);
+      throw e;
+    }
+    if (name.split('/')[0] !== host) bad(`${JSON.stringify(name)} is not under the document's host ${host} (a subdomain is another host)`, p);
+    const entries = d[name];
+    if (!Array.isArray(entries) || entries.length < 1 || entries.length > LIMITS.declaration_entries) bad(`a declared name has an array of 1 to ${LIMITS.declaration_entries} entries`, p);
+    out[name] = entries.map((e, i) => {
+      const q = `${p}[${i}]`;
+      if (!isObject(e)) bad('an entry is an object', q);
+      for (const m of sortedKeys(e)) if (!ENTRY_MEMBERS.includes(m)) bad(`unexpected member ${JSON.stringify(m)}`, q);
+      for (const m of ['licence', 'valid_from']) if (!has(e, m)) bad(`missing member ${JSON.stringify(m)}`, q);
+      if (typeof e.licence !== 'string') bad('licence must be a string', memberPath(q, 'licence'));
+      try {
+        checkLicence(e.licence, memberPath(q, 'licence'));
+      } catch (x) {
+        if (x instanceof DatumeshError) bad(`licence: ${x.detail}`, memberPath(q, 'licence'));
+        throw x;
+      }
+      if (typeof e.valid_from !== 'string' || !isInstant(e.valid_from)) bad('valid_from must be an instant', memberPath(q, 'valid_from'));
+      const entry: DeclarationEntry = { licence: e.licence, valid_from: e.valid_from };
+      if (has(e, 'valid_to')) {
+        if (typeof e.valid_to !== 'string' || !isInstant(e.valid_to)) bad('valid_to must be an instant', memberPath(q, 'valid_to'));
+        if (!(e.valid_to > e.valid_from)) bad('valid_to must be later than valid_from', q);
+        entry.valid_to = e.valid_to;
+      }
+      return entry;
+    });
+  }
+  return out;
+}
+
 /** Validate a parsed key document for `host` (SPEC 9.2). Throws KeyDocError. */
-function validateKeyDocument(doc: JsonValue, host: string): KeyEntry[] {
+function validateKeyDocument(doc: JsonValue, host: string): { keys: KeyEntry[]; declarations?: Declarations } {
   if (!isObject(doc)) bad('expected an object', '$');
-  for (const k of sortedKeys(doc)) if (!['host', 'keys', 'proto'].includes(k)) bad(`unexpected member ${JSON.stringify(k)}`, '$');
+  for (const k of sortedKeys(doc)) if (!['declarations', 'host', 'keys', 'proto'].includes(k)) bad(`unexpected member ${JSON.stringify(k)}`, '$');
   for (const k of ['host', 'keys', 'proto']) if (!has(doc, k)) bad(`missing member ${JSON.stringify(k)}`, '$');
   if (doc.proto !== 'datumesh/1') bad("proto must be 'datumesh/1'", '$.proto');
   // 9.2 / 9.3: `host` is a DNS name (2.1); a document for any other host cannot satisfy 9.2.
@@ -87,7 +156,9 @@ function validateKeyDocument(doc: JsonValue, host: string): KeyEntry[] {
     if (has(k, 'valid_to')) e.valid_to = k.valid_to as string;
     out.push(e);
   });
-  return out;
+  // Since spec-0.4.3: the optional declarations, checked after the host they must be under.
+  if (has(doc, 'declarations')) return { keys: out, declarations: validateDeclarations(doc.declarations, host) };
+  return { keys: out };
 }
 
 function docResult(host: string, parse: () => JsonValue): KeysResult {
@@ -99,8 +170,10 @@ function docResult(host: string, parse: () => JsonValue): KeysResult {
     return { ok: false, code: 'E_KEY_DOC', host, detail: `key document is not strict JSON (${d})` };
   }
   try {
-    const keys = validateKeyDocument(doc, host);
-    return { ok: true, code: 'OK', host, detail: `${keys.length} key(s) for ${host}`, keys };
+    const { keys, declarations } = validateKeyDocument(doc, host);
+    const r: KeysResult = { ok: true, code: 'OK', host, detail: `${keys.length} key(s) for ${host}${declarations ? `, declarations for ${Object.keys(declarations).length} function(s)` : ''}`, keys };
+    if (declarations) r.declarations = declarations;
+    return r;
   } catch (e) {
     if (e instanceof KeyDocError) return { ok: false, code: 'E_KEY_DOC', host, detail: `${e.message} at ${e.path}` };
     throw e;

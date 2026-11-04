@@ -13,14 +13,14 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The package records spec-0.4.2; the spec submodule must be that revision: the commit the
-# spec-0.4.2 tag will point to (CI checkouts do not fetch the submodule's tags, so check the commit).
+# The package records spec-0.4.3; the spec submodule must be that revision: the commit the
+# spec-0.4.3 tag points to (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  fc870ab*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.2)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.2 (fc870ab)"; exit 1 ;;
+  99123b2*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.3)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.3 (99123b2)"; exit 1 ;;
 esac
-grep -q '"spec": "spec-0.4.2"' package.json
+grep -q '"spec": "spec-0.4.3"' package.json
 
 echo "== npm pack (in node:18-slim)"
 docker run --rm -v "$ROOT":/src:ro -v "$WORK":/out node:18-slim sh -ec '
@@ -68,7 +68,7 @@ docker run --rm -v "$WORK":/pkg:ro node:18-slim sh -ec '
   mkdir /app && cd /app && npm init -y >/dev/null
   npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz typescript@5.9.3
   cat > esm.mts <<TS
-import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, sliceId, membersHash, sliceEntry, resolveMesh, type MeshResult, checkBatch, checkSlicePage, type BatchResult, type SlicePageResult, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult, type Recompute } from "@datumesh/verify";
+import { verify, keysFromResponse, parseUri, checkEnvelope, resolvedUnit, sliceId, membersHash, sliceEntry, resolveMesh, type MeshResult, checkBatch, checkSlicePage, type BatchResult, type SlicePageResult, inheritLicence, checkEntitlement, inputLicences, isUnrooted, licenceTier, type LicenceResult, type EntitlementResult, type Declarations, type ForeignDetail, FOREIGN_DETAILS, DatumeshError, SPEC_VERSION, type VerifyResult, type KeysResult, type EnvelopeResult, type Recompute } from "@datumesh/verify";
 const k: KeysResult = keysFromResponse("rates.example.org", 404);
 const r: VerifyResult = verify("{}", k, null, new Uint8Array([1]));
 const code: string = r.code;
@@ -87,7 +87,12 @@ const pin: string | null = env.fnHash;
 const b: BatchResult = checkBatch(429, "{}", k, [{ cell_id: "00".repeat(32), fn_hash: "11".repeat(32), mesh: "mesh.example.org" }]);
 const items: EnvelopeResult[] | null = b.items;
 const sp: SlicePageResult = checkSlicePage(404, "{}", k, { slice_id: "00".repeat(32), after: { d: { type: "date", value: "2024-01-01" } } });
-console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e, fault, rc, ids, job, m.code, eps, pin, items, sp.page);
+const decl: Declarations | undefined = k.declarations;
+const lr: LicenceResult = inheritLicence(["MIT"], decl ?? null, "calc.example.net/convert", "2024-03-16T09:00:00.000000Z", "CC0-1.0");
+const er: EntitlementResult | null = env.ok ? null : checkEntitlement("{}", inputLicences("{}", {}, {}, k), k);
+const fd: ForeignDetail | null = env.foreignDetail;
+const tier: number = licenceTier("MIT");
+console.log(SPEC_VERSION, code, ref.fn, env.outcome, unit, checked, e, fault, rc, ids, job, m.code, eps, pin, items, sp.page, lr.licence, er, fd, FOREIGN_DETAILS, isUnrooted("local.invalid"), tier);
 TS
   cat > cjs.cts <<TS
 import lib = require("@datumesh/verify");

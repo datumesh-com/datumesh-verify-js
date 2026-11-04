@@ -49,6 +49,13 @@ export type Trust = 'primary' | 'computed' | 'verified' | 'unverified';
 export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE';
 export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE'];
 
+/**
+ * Since spec-0.4.3: what failed in reaching a foreign mesh, the `detail` of an `error` envelope
+ * carrying E_FOREIGN_UNAVAILABLE (SPEC 5.5).
+ */
+export type ForeignDetail = 'offline' | 'network' | 'dns' | 'tls' | 'timeout' | 'refused';
+export const FOREIGN_DETAILS: readonly ForeignDetail[] = ['offline', 'network', 'dns', 'tls', 'timeout', 'refused'];
+
 export interface EnvelopeResult {
   /** True when the envelope is well formed, matches the status, and its receipt (if any) is signature-valid. */
   ok: boolean;
@@ -74,6 +81,11 @@ export interface EnvelopeResult {
   pending: Pending | null;
   /** Since spec-0.4.2: the envelope's `fn_hash` (the function the answer is of) when ok and present, else null. */
   fnHash: string | null;
+  /**
+   * Since spec-0.4.3: when ok and the envelope is an `error` with E_FOREIGN_UNAVAILABLE (the cell
+   * belongs to another mesh, which could not be reached; HTTP 502), its `detail`; else null.
+   */
+  foreignDetail: ForeignDetail | null;
 }
 
 /** SPEC 5.5: required and optional members per outcome (besides `outcome`). */
@@ -84,7 +96,7 @@ const MEMBERS: Record<Outcome, { required: string[]; optional: string[] }> = {
   unlicensed: { required: [], optional: ['fn_hash'] },
   payment_required: { required: ['quote'], optional: ['fn_hash'] },
   rate_limited: { required: ['retry_after_seconds'], optional: ['fn_hash'] },
-  error: { required: ['error'], optional: ['fn_hash'] },
+  error: { required: ['error'], optional: ['detail', 'fn_hash'] }, // detail since spec-0.4.3
   bad_request: { required: ['error'], optional: ['fn_hash'] },
   pending: { required: ['estimate_seconds', 'job', 'poll', 'request'], optional: [] },
 };
@@ -169,6 +181,9 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
   for (const k of sortedKeys(o)) if (k !== 'outcome' && !required.includes(k) && !optional.includes(k)) bad(`member ${JSON.stringify(k)} is not allowed with outcome ${outcome}`, memberPath('$', k));
   if (has(o, 'reason') && !has(o, 'superseded_by')) bad('reason is only present with superseded_by', '$.reason');
   if (outcome === 'not_covered' && has(o, 'fault') && has(o, 'error')) bad('not_covered carries fault or error, not both', '$.error');
+  // Since spec-0.4.3: detail is present exactly when error is E_FOREIGN_UNAVAILABLE (only an
+  // error envelope may carry either: the table above and the code lists below).
+  if (outcome === 'error' && (o.error === 'E_FOREIGN_UNAVAILABLE') !== has(o, 'detail')) bad('detail is present exactly when error is E_FOREIGN_UNAVAILABLE', has(o, 'detail') ? '$.detail' : '$');
   for (const k of sortedKeys(o)) {
     const v = o[k];
     const p = memberPath('$', k);
@@ -187,6 +202,9 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
         } else if (typeof v !== 'string' || NOT_ERROR_CODES.includes(v) || !(ERROR_CODES as readonly string[]).includes(v)) {
           bad('error is a code from SPEC.md 10.2 other than E_ENVELOPE, E_JOB_UNKNOWN, E_SLICE_AT_CELL and E_NAME_UNBOUND', p);
         }
+        break;
+      case 'detail':
+        if (typeof v !== 'string' || !(FOREIGN_DETAILS as readonly string[]).includes(v)) bad(`detail is one of ${FOREIGN_DETAILS.join(', ')} (SPEC 5.5)`, p);
         break;
       case 'fn_hash':
         if (typeof v !== 'string' || !HEX64.test(v)) bad('fn_hash is a function hash: 64 lowercase hex digits', p);
@@ -317,7 +335,7 @@ function subNumbers(numbers: Map<string, string>, prefix: string): Map<string, s
 const atPath = (prefix: string, p: string | null) => (p === null ? prefix : p.replace(/^\$/, prefix));
 
 type Req = { cell_id?: string; asof?: string; job?: string; fn_hash?: string; mesh?: string };
-const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null, pending: null, fnHash: null });
+const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null, pending: null, fnHash: null, foreignDetail: null });
 
 /**
  * SPEC 5.5 step 6 for a verified receipt: `primary` exactly when its condition holds; with the
@@ -345,6 +363,8 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   try {
     outcome = members(o, numbers); // step 2
     if (!STATUS[outcome](status)) bad(`status ${status} does not match outcome ${outcome}`, '$.outcome'); // step 3
+    // Step 3 since spec-0.4.3: E_FOREIGN_UNAVAILABLE is answered with 502 exactly.
+    if ((o as JsonObject).error === 'E_FOREIGN_UNAVAILABLE' && status !== 502) bad(`E_FOREIGN_UNAVAILABLE is answered with HTTP 502, not ${status}`, '$.error');
   } catch (e) {
     if (e instanceof Bad) return failed('E_ENVELOPE', e.detail, e.path);
     throw e;
@@ -381,7 +401,8 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
     }
     const fault = has(env, 'fault') ? (env.fault as Fault) : null;
     const detail = fault ? `outcome ${outcome}, fault ${fault}` : pending ? `outcome pending, job ${pending.job}, estimate ${pending.estimateSeconds} s` : has(env, 'error') ? `outcome ${outcome}, ${String(env.error)}` : `outcome ${outcome}`;
-    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail, path: null, fault, pending, fnHash: echo };
+    const foreignDetail = has(env, 'detail') ? (env.detail as ForeignDetail) : null;
+    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: foreignDetail ? `${detail} (${foreignDetail})` : detail, path: null, fault, pending, fnHash: echo, foreignDetail };
   }
   // Step 4.
   let r: { receipt: JsonObject; hash: string };
@@ -409,7 +430,7 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   if (problem !== null) return failed('E_ENVELOPE', problem, '$.trust', r.hash);
   if (echo !== null && echo !== cell.fn_hash) return failed('E_ENVELOPE', "fn_hash echoes another function than the receipt's", '$.fn_hash', r.hash);
   if (env.superseded_by === r.hash) return failed('E_ENVELOPE', 'superseded_by is the receipt itself', '$.superseded_by', r.hash);
-  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo };
+  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null };
 }
 
 function checkStatus(status: unknown): asserts status is number {
@@ -581,7 +602,7 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
     out.push({ outcome: m.outcome as 'ok' | 'stale', trust: m.trust as Trust, receiptHash: r.hash, fnHash: mecho, cell });
   }
   const page: SlicePage = { slice, members: out, next: has(o, 'next') ? (o.next as string) : null };
-  return { ok: true, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, page };
+  return { ok: true, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, page };
 }
 
 function slicePage(status: number, o: JsonValue, numbers: Map<string, string>, sources: Sources, request: SliceRequest): SlicePageResult {

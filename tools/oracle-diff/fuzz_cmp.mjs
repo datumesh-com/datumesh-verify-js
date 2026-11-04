@@ -12,7 +12,8 @@ for (const { vector: v, oracle } of lines) {
   // licence and entitlement probes (spec-0.4.3) carry the reference's result as JSON, not a code.
   const shape = (g) => g.error ?? (v.kind === 'licence' ? JSON.stringify({ licence: g.licence, reason: g.reason }) : v.kind === 'entitlement' ? JSON.stringify({ entitled: g.entitled, reason: g.reason }) : 'success');
   try { mine = shape(await run(v)); } catch (e) { mine = 'THREW ' + e; threw++; }
-  if (mine === oracle) { same++; continue; }
+  const norm = (x) => (typeof x === 'string' && x.startsWith('{') ? JSON.stringify(JSON.parse(x)) : x); // the reference's JSON is spaced
+  if (norm(mine) === norm(oracle)) { same++; continue; }
   const k = `${v.kind}: oracle ${oracle} / mine ${mine}`;
   (diffs[k] ??= []).push(v);
 }

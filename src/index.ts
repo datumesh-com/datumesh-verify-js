@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.4.2).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.4.3).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -13,15 +13,16 @@ import { KINDS, cellUnit, inferKind, validate, validateMembers, type Kind } from
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
 export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { checkEnvelope, checkSlicePage, checkBatch, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult } from './envelope.js';
+export { checkEnvelope, checkSlicePage, checkBatch, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult, type ForeignDetail, FOREIGN_DETAILS } from './envelope.js';
 export { resolveMesh, MESH_ENDPOINTS, type MeshResult, type DocumentResponse } from './mesh.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
-export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource } from './keys.js';
+export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource, type Declarations, type DeclarationEntry } from './keys.js';
+export { inheritLicence, checkEntitlement, inputLicences, isUnrooted, licenceTier, LICENCE_TIERS, type LicenceResult, type LicenceReason, type EntitlementResult, type EntitlementReason } from './licence.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.4.2';
+export const VERSION = '0.4.3';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);

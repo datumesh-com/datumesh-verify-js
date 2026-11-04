@@ -58,7 +58,9 @@ test('the library agrees with the reference tool on every spec-0.4.3 probe', asy
     // A licence probe's oracle is the reference's {licence, reason}, an entitlement probe's
     // {entitled, reason}; every other probe's, its code ("success" when accepted).
     const mine = got.error ?? (v.kind === 'licence' ? JSON.stringify({ licence: got.licence, reason: got.reason }) : v.kind === 'entitlement' ? JSON.stringify({ entitled: got.entitled, reason: got.reason }) : 'success');
-    if (mine !== oracle) diffs.push(`${v.id}: reference ${oracle}, library ${mine}`);
+    // The reference's JSON is Python's (spaced): compare the values.
+    const norm = (x) => (x.startsWith('{') ? JSON.stringify(JSON.parse(x)) : x);
+    if (norm(mine) !== norm(oracle)) diffs.push(`${v.id}: reference ${oracle}, library ${mine}`);
   }
   assert.deepEqual(diffs, []);
 });
@@ -206,7 +208,10 @@ test('10.3 checkEntitlement and inputLicences: the vectors through the API; K of
     assert.throws(() => checkEntitlement(R, L, other), TypeError, id);
   }
   const v = vector('entitlement/slice-members');
-  assert.deepEqual(inputLicences(v.input, v.receipts, v.manifests), ['CC0-1.0', 'CC-BY-SA-4.0']);
+  // In manifest order: one licence per member receipt.
+  const members = JSON.parse(Object.values(v.manifests)[0]).members;
+  assert.deepEqual(inputLicences(v.input, v.receipts, v.manifests), members.map((h) => JSON.parse(v.receipts[h]).licence));
+  assert.deepEqual(inputLicences(v.input, v.receipts, v.manifests).sort(), ['CC-BY-SA-4.0', 'CC0-1.0']);
   const e = checkEntitlement(v.input, ['CC0-1.0', 'CC-BY-SA-4.0'], keysOf(v).find((k) => k.host === 'calc.example.net'));
   assert.deepEqual(e, { entitled: true, reason: 'open', licence: 'CC-BY-SA-4.0' });
   // A refusal has no licence; a mismatch names the licence the rule gives.
