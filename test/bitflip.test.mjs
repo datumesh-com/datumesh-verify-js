@@ -41,7 +41,7 @@ for (const v of receipts) {
 }
 
 test('bit flip totals', () => {
-  assert.equal(receipts.length, 31); // 18 of spec-0.3.0 + 13 slice-lineage receipts
+  assert.equal(receipts.length, 33); // 18 of spec-0.3.0 + 13 slice-lineage receipts + 2 of spec-0.4.3 (keydoc-declarations, unrooted-key-supplied)
   assert.ok(flips > 50000, `ran ${flips} flips`);
   assert.equal(sigFlips, receipts.length * 512);
   console.log(`DIAG: canonical-byte flips: ${flips}; signature flips: ${sigFlips}; codes: ${JSON.stringify(codes)}`);

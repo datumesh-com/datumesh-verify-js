@@ -15,13 +15,15 @@ export const OUTPUTS = {
   function: ['canonical', 'sha256'],
   uri: ['object', 'canonical', 'sha256', 'https'],
   keyid: ['key_id'],
-  keys: ['key_ids'],
+  keys: ['key_ids', 'declarations'], // declarations (since spec-0.4.3) only when the document has them
   receipt: ['canonical', 'sha256', 'sig', 'level', 'blob_checked', 'code'], // blob_checked only with blob_hex; code only with success at level signed (E_EVAL_UNAVAILABLE or E_INPUT_SUPERSEDED)
   unit: ['unit'],
   envelope: ['outcome', 'trust', 'receipt_hash', 'results'], // trust and receipt_hash only with a receipt; results for a slice page (5.6)
   batch: ['results', 'outcome'], // results for a 200 batch, outcome for a refusal (5.7)
   slice: ['canonical', 'sha256', 'slice_id', 'members_hash', 'entry'], // members_hash and entry only for a manifest
   mesh: ['bindings', 'endpoints'],
+  licence: ['licence', 'reason'], // since spec-0.4.3: licence inheritance (8.5)
+  entitlement: ['entitled', 'reason'], // since spec-0.4.3: the entitlement check (10.3)
 };
 
 /** The endpoints SPEC 9.6 defines; a resolved mesh keeps only these. */
@@ -156,6 +158,32 @@ export function makeRunner(lib, sha256) {
           const r = keysFromEnv(lib, v.host, v.env);
           if (!r.ok) return { id: v.id, error: r.code };
           out.key_ids = r.keys.map((k) => k.id);
+          // Since spec-0.4.3: the document's declarations, as given, when it has them (SPEC 11).
+          if (r.declarations !== undefined) out.declarations = r.declarations;
+          break;
+        }
+        case 'licence': {
+          // SPEC 8.5 as a pure function; `declarations` {} (or absent) is none.
+          const r = lib.inheritLicence(v.licences, v.declarations ?? null, v.fn, v.issued, v.mesh_licence);
+          out.licence = r.licence;
+          out.reason = r.reason;
+          break;
+        }
+        case 'entitlement': {
+          // SPEC 11: verify R first (through step 6), take L by following R's inputs through
+          // `receipts` and `manifests` (each input receipt verified through step 6 as well), and K
+          // from the env of the host of R's cell.ns; then the check of 10.3.
+          const keys = receiptKeys(lib, v);
+          const res = lib.verify(inputOf(v), keys);
+          if (!res.ok) return { id: v.id, error: res.code };
+          const L = lib.inputLicences(inputOf(v), v.receipts || {}, v.manifests || {}, keys);
+          const ns = JSON.parse(text(lib.canonicalize(inputOf(v), 'receipt'))).cell.ns;
+          const host = ns.split('/')[0];
+          const K = keysFromEnv(lib, host, (v.keys || {})[host]);
+          if (!K.ok) return { id: v.id, error: K.code };
+          const e = lib.checkEntitlement(inputOf(v), L, K);
+          out.entitled = e.entitled;
+          out.reason = e.reason;
           break;
         }
         case 'receipt': {

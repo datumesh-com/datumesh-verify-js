@@ -19,7 +19,7 @@ const cjs = createRequire(import.meta.url)('../dist/cjs/index.js');
 const { checkEnvelope, resolveMesh, verify, keysFromResponse, ERROR_CODES } = lib;
 
 test('ERROR_CODES: E_JOB_UNKNOWN and E_MESH_DOC after E_ENVELOPE, last (SPEC 10.2)', () => {
-  assert.deepEqual(ERROR_CODES.slice(-5, -2), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_MESH_DOC']); // spec-0.4.2 appends two more
+  assert.deepEqual(ERROR_CODES.slice(-6, -3), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_MESH_DOC']); // spec-0.4.2 appends two more, spec-0.4.3 one
 });
 
 test('the library agrees with the reference tool on every spec-0.4.1 probe', async () => {

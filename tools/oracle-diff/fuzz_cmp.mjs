@@ -9,7 +9,9 @@ const diffs = {};
 let same = 0, threw = 0;
 for (const { vector: v, oracle } of lines) {
   let mine;
-  try { mine = (await run(v)).error ?? 'success'; } catch (e) { mine = 'THREW ' + e; threw++; }
+  // licence and entitlement probes (spec-0.4.3) carry the reference's result as JSON, not a code.
+  const shape = (g) => g.error ?? (v.kind === 'licence' ? JSON.stringify({ licence: g.licence, reason: g.reason }) : v.kind === 'entitlement' ? JSON.stringify({ entitled: g.entitled, reason: g.reason }) : 'success');
+  try { mine = shape(await run(v)); } catch (e) { mine = 'THREW ' + e; threw++; }
   if (mine === oracle) { same++; continue; }
   const k = `${v.kind}: oracle ${oracle} / mine ${mine}`;
   (diffs[k] ??= []).push(v);

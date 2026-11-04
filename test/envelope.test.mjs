@@ -18,8 +18,8 @@ const matches = (outcome, s) => (outcome === 'error' ? s >= 500 && s <= 599 : ST
 const OTHER = [100, 199, 200, 201, 204, 301, 302, 304, 400, 401, 402, 403, 404, 409, 429, 499, 500, 502, 503, 599, 600, 0, 999];
 
 test('there are envelope vectors for every outcome', () => {
-  assert.equal(allEnvelopes.length, 136); // a468606: + 5; fc870ab: + 1
-  assert.equal(envelopes.length, 117); // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
+  assert.equal(allEnvelopes.length, 143); // a468606: + 5; fc870ab: + 1; spec-0.4.3: + 7 (E_FOREIGN_UNAVAILABLE)
+  assert.equal(envelopes.length, 124); // spec-0.4.3: + 7 // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
   const outcomes = new Set(envelopes.filter((v) => v.valid).map((v) => v.outcome));
   assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'pending', 'rate_limited', 'stale', 'unlicensed']);
 });
@@ -27,7 +27,7 @@ test('there are envelope vectors for every outcome', () => {
 for (const v of envelopes) {
   test(`checkEnvelope: ${v.id} -> ${v.valid ? v.outcome : v.error}`, () => {
     const r = checkEnvelope(v.status, v.input, keysOf(v), v.request);
-    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'fault', 'fnHash', 'ok', 'outcome', 'path', 'pending', 'receiptHash', 'trust']); // fault since spec-0.4.0, pending since spec-0.4.1, fnHash since spec-0.4.2
+    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'fault', 'fnHash', 'foreignDetail', 'ok', 'outcome', 'path', 'pending', 'receiptHash', 'trust']); // fault since spec-0.4.0, pending since spec-0.4.1, fnHash since spec-0.4.2, foreignDetail since spec-0.4.3
     if (v.valid) {
       assert.equal(r.ok, true, r.detail);
       assert.equal(r.code, 'OK');
@@ -117,7 +117,8 @@ test('member values (step 2)', () => {
   // error: a code from SPEC 10.2 other than E_ENVELOPE (and, since spec-0.4.1, E_JOB_UNKNOWN);
   // bad_request: a URI parse code (E_JOB_UNKNOWN only at a job URL: spec-0.4.1.test.mjs).
   // spec-0.4.2: nor E_SLICE_AT_CELL and E_NAME_UNBOUND, request codes.
-  for (const c of ERROR_CODES) assert.equal(codeOf(503, { outcome: 'error', error: c }), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND'].includes(c) ? 'E_ENVELOPE' : 'OK', c);
+  // spec-0.4.3: E_FOREIGN_UNAVAILABLE needs 502 and a detail, so it fails here (spec-0.4.3.test.mjs).
+  for (const c of ERROR_CODES) assert.equal(codeOf(503, { outcome: 'error', error: c }), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE'].includes(c) ? 'E_ENVELOPE' : 'OK', c);
   for (const c of ['E_TEAPOT', 'OK', '', 'e_signature', 'E_SIGNATURE ', 5, null]) assert.equal(codeOf(503, { outcome: 'error', error: c }), 'E_ENVELOPE', String(c));
   const PARSE = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
   // spec-0.4.2: + E_CANON_HEX (a pin) and E_SLICE_AT_CELL.
