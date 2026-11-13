@@ -28,8 +28,9 @@ const codeOf = (f) => {
 const PIN = '7b58ecb8fd23b644c87951d0bd609790ff547cbb23fed27186c669ce2ce0aa80';
 
 test('ERROR_CODES: E_SLICE_AT_CELL and E_NAME_UNBOUND after E_MESH_DOC, last (SPEC 10.2)', () => {
-  assert.deepEqual(ERROR_CODES.slice(-4, -1), ['E_MESH_DOC', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND']); // spec-0.4.3 appends E_FOREIGN_UNAVAILABLE
-  assert.equal(ERROR_CODES.length, 49);
+  const i = ERROR_CODES.indexOf('E_MESH_DOC'); // spec-0.4.3 appends E_FOREIGN_UNAVAILABLE, spec-0.5.0 fourteen more
+  assert.deepEqual(ERROR_CODES.slice(i, i + 3), ['E_MESH_DOC', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND']);
+  assert.equal(ERROR_CODES.indexOf('E_NAME_UNBOUND') + 1, ERROR_CODES.indexOf('E_FOREIGN_UNAVAILABLE'));
 });
 
 test('the library agrees with the reference tool on every spec-0.4.2 probe', async () => {

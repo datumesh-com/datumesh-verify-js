@@ -13,14 +13,15 @@ IMAGES="${IMAGES:-node:18-slim}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The package records spec-0.4.3; the spec submodule must be that revision: the commit the
-# spec-0.4.3 tag points to (CI checkouts do not fetch the submodule's tags, so check the commit).
+# The package records spec-0.5.0; the spec submodule must be that revision: the commit the
+# spec-0.5.0 tag points to (7bed002 at the tests-first commit; if the tag moves to a later commit
+# after the cross-check, change it here) (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  99123b2*) echo "== spec submodule at $SPEC_HEAD (spec-0.4.3)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.4.3 (99123b2)"; exit 1 ;;
+  7bed002*) echo "== spec submodule at $SPEC_HEAD (spec-0.5.0)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.5.0 (7bed002)"; exit 1 ;;
 esac
-grep -q '"spec": "spec-0.4.3"' package.json
+grep -q '"spec": "spec-0.5.0"' package.json
 
 echo "== npm pack (in node:18-slim)"
 docker run --rm -v "$ROOT":/src:ro -v "$WORK":/out node:18-slim sh -ec '

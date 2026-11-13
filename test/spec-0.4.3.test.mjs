@@ -33,18 +33,12 @@ const URL2 = 'https://other.example.org/licence';
 const FN = 'calc.example.net/convert';
 const decl = (entries) => ({ [FN]: entries });
 
-test('versions name spec-0.4.3 and 0.4.3', () => {
-  assert.equal(lib.SPEC_VERSION, 'spec-0.4.3');
-  assert.equal(lib.VERSION, '0.4.3');
-  assert.equal(cjs.VERSION, '0.4.3');
-  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.4.3');
-  assert.equal(pkg.datumesh.spec, 'spec-0.4.3');
-});
+// (The test of the version strings moved to spec-0.5.0.test.mjs.)
 
 test('ERROR_CODES: E_FOREIGN_UNAVAILABLE last, after E_NAME_UNBOUND (SPEC 10.2)', () => {
-  assert.deepEqual(ERROR_CODES.slice(-2), ['E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE']);
-  assert.equal(ERROR_CODES.length, 49);
+  const i = ERROR_CODES.indexOf('E_NAME_UNBOUND'); // spec-0.5.0 appends fourteen more after E_FOREIGN_UNAVAILABLE
+  assert.deepEqual(ERROR_CODES.slice(i, i + 2), ['E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE']);
+  assert.equal(i + 2 <= ERROR_CODES.length, true);
   assert.deepEqual([...FOREIGN_DETAILS], ['offline', 'network', 'dns', 'tls', 'timeout', 'refused']);
 });
 
@@ -301,5 +295,5 @@ test('5.5: E_FOREIGN_UNAVAILABLE is an error envelope with 502 and a detail; det
   assert.deepEqual(b.items.map((i) => (i.ok ? i.foreignDetail : i.code)), ['refused', 'E_ENVELOPE']);
   assert.deepEqual([checkBatch(502, JSON.stringify(item.envelope), [], [req]).outcome], ['error']);
   // Never a verification result.
-  assert.ok(!ERROR_CODES.slice(0, -1).includes('E_FOREIGN_UNAVAILABLE'));
+  assert.equal(ERROR_CODES.filter((c) => c === 'E_FOREIGN_UNAVAILABLE').length, 1);
 });

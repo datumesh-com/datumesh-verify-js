@@ -24,6 +24,11 @@ export const OUTPUTS = {
   mesh: ['bindings', 'endpoints'],
   licence: ['licence', 'reason'], // since spec-0.4.3: licence inheritance (8.5)
   entitlement: ['entitled', 'reason'], // since spec-0.4.3: the entitlement check (10.3)
+  class: ['flattened', 'class_hash'], // since spec-0.5.0: define a class, flattened and hashed (16.2)
+  normalisation: [], // since spec-0.5.0: a valid vector is canonical under its rule (16.4); no outputs
+  key: ['decoded'], // since spec-0.5.0: an object key string decoded (16.5)
+  describe: [], // since spec-0.5.0: a describe answer passes 16.8; no outputs
+  define: ['canonical', 'sha256'], // since spec-0.5.0: the define-time check of a function (2.5)
 };
 
 /** The endpoints SPEC 9.6 defines; a resolved mesh keeps only these. */
@@ -160,6 +165,34 @@ export function makeRunner(lib, sha256) {
           out.key_ids = r.keys.map((k) => k.id);
           // Since spec-0.4.3: the document's declarations, as given, when it has them (SPEC 11).
           if (r.declarations !== undefined) out.declarations = r.declarations;
+          break;
+        }
+        case 'class': {
+          // SPEC 16.2, 11: v.input is the descriptor as written, v.name the class name, v.env
+          // {"functions": [descriptors], "classes": [flattened descriptors], "definer"}.
+          const r = lib.defineClass(v.input, v.name, v.env);
+          out.flattened = r.flattened;
+          out.class_hash = r.classHash;
+          break;
+        }
+        case 'normalisation':
+          lib.checkKeyNormalisation(v.rule, v.text);
+          break;
+        case 'key': {
+          const decoded = lib.parseObjectKey(v.input);
+          // 16.5: the encoding is unique, so formatting what was parsed gives the input back.
+          const again = lib.formatObjectKey(decoded);
+          if (again !== v.input) throw new Error(`formatObjectKey gave ${again}`);
+          out.decoded = decoded;
+          break;
+        }
+        case 'describe':
+          lib.checkDescribe(v.input, v.classes);
+          break;
+        case 'define': {
+          const r = lib.checkDefine(v.input, v.name);
+          out.canonical = text(r.canonical);
+          out.sha256 = await sha256(r.canonical);
           break;
         }
         case 'licence': {

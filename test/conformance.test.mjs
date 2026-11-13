@@ -12,23 +12,28 @@ import { loadVectors } from './helpers.mjs';
 const vectors = loadVectors();
 const applicable = vectors.filter((v) => !SKIPPED_KINDS.includes(v.kind));
 
-test('the vector set is complete (1236 vectors at spec-0.4.3 99123b2: 651 for verifier libraries, 585 formula-evaluator vectors)', () => {
-  assert.equal(vectors.length, 1236);
+test('the vector set is complete (1426 vectors at spec-0.5.0 7bed002: 778 for verifier libraries, 648 formula-evaluator vectors)', () => {
+  assert.equal(vectors.length, 1426);
   const kinds = new Set(vectors.map((v) => v.kind));
-  assert.deepEqual([...kinds].sort(), ['batch', 'call', 'cell', 'decimal', 'entitlement', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'keyid', 'keys', 'licence', 'mesh', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
+  assert.deepEqual([...kinds].sort(), ['batch', 'call', 'cell', 'class', 'decimal', 'define', 'describe', 'entitlement', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'key', 'keyid', 'keys', 'licence', 'mesh', 'normalisation', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
-  assert.equal(applicable.length, 651);
+  assert.equal(applicable.length, 778);
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.1: the kind mesh, 3 valid and 17 invalid, and 10 more (2 valid) at 3f79313.
-  assert.deepEqual([count('mesh', true), count('mesh', false)], [7, 26]); // spec-0.4.2: + versions (1, 1); spec-0.4.3: + keydoc-declarations
+  assert.deepEqual([count('mesh', true), count('mesh', false)], [11, 31]); // spec-0.4.2: + versions (1, 1); spec-0.4.3: + keydoc-declarations; spec-0.5.0: + 4 valid (3 unrooted loopback, describe endpoint), 5 invalid
   // SPEC 14 spec-0.4.3: 90 new: licence 50 and entitlement 11 (all valid), 7 envelope (2, 5) for
   // E_FOREIGN_UNAVAILABLE, 17 keys (2, 15) for declarations, 2 receipt, 1 mesh, 1 cell, 1 invalid receipt.
-  assert.deepEqual([count('licence', true), count('licence', false), count('entitlement', true), count('entitlement', false)], [50, 0, 11, 0]);
-  assert.deepEqual([count('keys', true), count('keys', false)], [3, 28]);
+  // spec-0.5.0: licence has 3 invalid (grammar of the arguments, 8.5), entitlement 6 (R and its inputs, 10.3).
+  assert.deepEqual([count('licence', true), count('licence', false), count('entitlement', true), count('entitlement', false)], [50, 3, 11, 6]);
+  // SPEC 14 spec-0.5.0, the new kinds (SPEC 11): class (12, 32), normalisation (8, 9), key (5, 6), describe (2, 6), define (3, 4).
+  assert.deepEqual([count('class', true), count('class', false), count('normalisation', true), count('normalisation', false), count('key', true), count('key', false), count('describe', true), count('describe', false), count('define', true), count('define', false)], [12, 32, 8, 9, 5, 6, 2, 6, 3, 4]);
+  assert.deepEqual([count('call', true), count('call', false)], [20, 25]);
+  assert.deepEqual([count('envelope', true), count('envelope', false)], [62, 100]);
+  assert.deepEqual([count('keys', true), count('keys', false)], [3, 28]); // unchanged at spec-0.5.0
   assert.equal(vectors.filter((v) => /foreign-unavailable/.test(v.id)).length, 7);
   for (const v of vectors.filter((x) => x.kind === 'keys' && x.valid)) assert.equal(v.declarations !== undefined, /declarations/.test(v.id), v.id);
   // SPEC 14 spec-0.4.2: the kinds batch (5, 6) and call (10, 17).
-  assert.deepEqual([count('batch', true), count('batch', false), count('call', true), count('call', false)], [5, 6, 10, 17]);
+  assert.deepEqual([count('batch', true), count('batch', false)], [5, 6]); // call: 10, 17 at spec-0.4.2, 20, 25 at spec-0.5.0 (above)
   // Since 3f79313 the valid mesh vectors carry their outputs.
   for (const v of vectors.filter((x) => x.kind === 'mesh' && x.valid)) assert.ok(v.bindings !== undefined && v.endpoints !== undefined, v.id);
   // SPEC 14 spec-0.4.0: 18 slice vectors (11 valid, 7 invalid), 30 slice-lineage receipts (13, 17).
