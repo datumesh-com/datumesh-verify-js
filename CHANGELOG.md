@@ -3,7 +3,14 @@
 Releases of `@datumesh/verify`. Earlier releases are described in the commit log and, for the
 specification side, in SPEC.md section 14.
 
-## 0.5.0 — spec-0.5.0
+## 0.5.1 — spec-0.5.0
+
+The first published release for `spec-0.5.0`; the library is 0.5.0's. The tag `v0.5.0` was
+pushed, but its release run stopped before publishing: the headless-browser test still expected
+spec-0.4.3's 651 vectors, where Chrome ran all 818 and passed. Tags are not moved, so the fix
+ships as 0.5.1, and 0.5.0 was never on npm.
+
+## 0.5.0 — spec-0.5.0 (tagged, not published)
 
 Conforms to the Datumesh specification revision `spec-0.5.0` (spec commit `c8896ad`): all 818 of its
 vectors this library runs pass (the new kinds `class`, `normalisation`, `key`, `describe` and

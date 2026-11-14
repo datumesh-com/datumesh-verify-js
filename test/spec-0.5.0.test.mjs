@@ -65,12 +65,12 @@ async function agreesOnProbes(item) {
 // Versions (the package, both builds)
 // ------------------------------------------------------------------------------------------
 
-test('versions name spec-0.5.0 and 0.5.0', () => {
+test('versions name spec-0.5.0 and 0.5.1 (0.5.0 tagged, not published)', () => {
   assert.equal(lib.SPEC_VERSION, 'spec-0.5.0');
-  assert.equal(lib.VERSION, '0.5.0');
-  assert.equal(cjs.VERSION, '0.5.0');
+  assert.equal(lib.VERSION, '0.5.1');
+  assert.equal(cjs.VERSION, '0.5.1');
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.5.0');
+  assert.equal(pkg.version, '0.5.1');
   assert.equal(pkg.datumesh.spec, 'spec-0.5.0');
 });
 
