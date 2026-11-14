@@ -14,12 +14,12 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # The package records spec-0.5.0; the spec submodule must be that revision: the commit the
-# spec-0.5.0 tag points to (7bed002 at the tests-first commit; if the tag moves to a later commit
+# spec-0.5.0 tag points to (c8896ad at the re-pin tests-first commit (7bed002 at the first one); if the tag moves to a later commit
 # after the cross-check, change it here) (CI checkouts do not fetch the submodule's tags, so check the commit).
 SPEC_HEAD="$(git -C spec rev-parse HEAD)"
 case "$SPEC_HEAD" in
-  7bed002*) echo "== spec submodule at $SPEC_HEAD (spec-0.5.0)" ;;
-  *) echo "spec submodule at $SPEC_HEAD, not spec-0.5.0 (7bed002)"; exit 1 ;;
+  c8896ad*) echo "== spec submodule at $SPEC_HEAD (spec-0.5.0)" ;;
+  *) echo "spec submodule at $SPEC_HEAD, not spec-0.5.0 (c8896ad)"; exit 1 ;;
 esac
 grep -q '"spec": "spec-0.5.0"' package.json
 

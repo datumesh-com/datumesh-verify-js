@@ -222,3 +222,50 @@ to report (DEFECTS.md); do not special-case it.
    the reference as `E_CLASS_METHOD` (the method check), although 16.1 says `E_CLASS_MEMBER` for a
    lookup signature; the vector `invalid/class-lookup-signature` (one string argument `label` missing)
    gives `E_CLASS_MEMBER`.
+
+## Re-pin to c8896ad
+
+The spec submodule moved from `7bed002` to `c8896ad` (`6d5633e` plus 8 formula-evaluator vectors; no
+existing vector changed). 1474 vectors: **818** for a verifier library (was 778), **656** skipped (was
+648). New for a library: 40 vectors (`describe` 4 valid and 12 invalid, `envelope` 2 and 2, `key` 2 and
+4, `normalisation` 1 and 6, `function` 4 invalid, `class` 1 invalid); the other 8 are `call`/`formula`/
+`formula-eval`, skipped. Read SPEC 14 "Library findings (verifier libraries, spec-0.5.0)", 16.4, 16.5 and
+16.8 again; the tests below are derived from that text. Do not edit a test to fit code: report it.
+
+Tests are in `test/spec-0.5.0.test.mjs` (section "Re-pin to spec c8896ad", names start `re-pin N:`).
+"Fails now" is the state at the tests-first commit.
+
+| Point | Test (`re-pin N: ...`) | SPEC | Fails now |
+|---|---|---|---|
+| 1 key codes are `bad_request` | `1: the four key-code envelope vectors`; `1: the key codes are bad_request codes at 400, and in no other outcome`; `1: bad_request carries exactly the parse codes, ... and the two key codes` | 5.5, 5.8, 10.2 | yes: `checkEnvelope` refuses them in `bad_request`, accepts them in `error` |
+| 2 exact list refused in `error` | `2: an error envelope carries every code of 10.2 except exactly the 18 listed`; `2: the invalid error-envelope vectors of the list` | 5.5, 10.2 | yes: the two key codes pass in `error` (E_FOREIGN_UNAVAILABLE stays allowed, status 502 and `detail`) |
+| 3 string value first (16.4) | `3: the normalisation vectors of c8896ad`; `3: under every rule a key value is first a string value (3.5)`; `3: ... over 1024 bytes is E_CANON_LIMIT`; `3: none accepts every string valid by 3.5, the empty string included`; `3: nfc_strict refuses each Unicode 15.1 White_Space character but U+0020` | 16.4, 3.5 | yes: `none` accepts tab, NUL, NFD and 1025 bytes; a control character under `nfc_strict` is `E_KEY_NORMALISATION`, not `E_CANON_STRING` |
+| 4 unknown rule, empty `classes` | `4: the four function vectors and the class-lookup vector`; `4: on a function argument an unknown rule is E_SCHEMA ...`; `4: an empty classes ... is E_CANON_SET`; `4: in a class key an unknown rule is E_CLASS_MEMBER; none is a rule there` | 16.1, 7 | no: pins what the library does already |
+| 5 describe check, six steps | `5: all 24 describe vectors`; `5: step 1, parse`; `5: step 4, the held class is found by class_hash`; `5: step 4, a client holding no class stops after step 3`; `5: step 5, an object answer against the held class`; `5: step 5 and 6, args and returns ... only ... the method functions the client holds`; `5: step 2, a description is 1 to 1024 bytes`; `5: step 2, same_as is ascending and unique`; `5: a class-typed key in an object answer ...` | 16.8, 16.5 | yes, except steps 1 and 4 (already so). `checkDescribe(answer, classes, functions?)` takes the method functions as an optional third argument (an array of function descriptors, as a `describe` vector's `functions`); `args` and `returns` are compared only for a method whose descriptor is held (found by `fn_hash`); `description` empty is `E_DESCRIBE`; `same_as` unsorted or duplicated is `E_DESCRIBE`; an object answer's keys are checked against the held class (names, types, normalisations); a class-typed key is a string scalar |
+| 6 class-typed key in the object JSON | `6: the key vectors given class_hash have object and object_id ...`; `6: the object JSON holds a class-typed key as the typed string scalar of its encoding`; `6: a nested object's id` | 16.5 | yes: `objectJson` raises `E_SCHEMA` on a nested key. The tests call `objectJson` / `objectId` with a **decoded key plus `class_hash`**, `{...parseObjectKey(enc), class_hash}`, nested objects allowed, each nested key written as `{"type": "string", "value": <formatObjectKey(nested)>}`; the runner (`tools/vector-runner.mjs`, kind `key` with `class_hash`) does the same and outputs `object` and `object_id`. The JSON form (typed scalars only) keeps working |
+| 7 encoding at most 1024 bytes | `7: the key vectors of c8896ad`; `7: an encoding is one string value: 1024 bytes as a whole ...`; `7: every failure to decode is E_KEY_ENCODING` | 16.5 | yes for the whole-length bound and the 4 invalid vectors (a string in an encoding that is NFD or holds a control character, a calendar-invalid date, over-length); the rest passes already |
+| 8 `shortId` of a malformed id | `8: shortId of a string that is not 64 lowercase hex digits is E_CANON_HEX` | 16.8 | no: pins what the library does already |
+
+Old tests changed (they asserted the 6d5633e-era behaviour or the old counts):
+- `test/conformance.test.mjs`: 1474 vectors, 818 run, 656 skipped; `class` (12, 33), `normalisation`
+  (9, 15), `key` (7, 10), `describe` (6, 18), `call` (20, 31), `envelope` (64, 104).
+- `test/envelope.test.mjs`: counts (168 envelope vectors, 147 outside the slice endpoint); the two key
+  codes are `bad_request` codes and in `NOT_IN_ERROR_ENVELOPE`.
+- `test/spec-0.5.0.test.mjs`: the commit and count (`c8896ad`, 1474); the vector counts in the item 5-8
+  titles; the item 3 `error`/`bad_request` code lists; item 6 `each rule of the closed list`: a control
+  character or a non-NFC string is `E_CANON_STRING` under every rule (3.5 first), and U+05C8 (unassigned
+  in Unicode 15.1) is no longer a valid `hebrew_consonantal` value; item 10: `OUTPUTS.key` is
+  `decoded`, `object`, `object_id`.
+- `tools/vector-runner.mjs`: `describe` passes `v.functions` as the third argument; `key` with
+  `class_hash` outputs `object` and `object_id` (`OUTPUTS.key` lists all three; a vector without them
+  compares undefined with undefined).
+- `scripts/package-test.sh`: the submodule commit `c8896ad`.
+
+Open points of the spec, not decided by the tests (listed in the report):
+- A rule outside the closed list given to the pure `checkKeyNormalisation(rule, text)`: 16.4 says
+  `E_CLASS_MEMBER` in a class key and `E_SCHEMA` on a function argument, not for the bare check. The
+  tests only require an error (`item 6: the check is pure`).
+- The API shapes for the third argument of `checkDescribe` and for `objectJson`/`objectId` of a decoded
+  key (above) are the tests' choice; the text gives the vectors' fields, not the signatures.
+- 16.8 step 5 does not say whether the answer's `class` name is compared with a held class's name; the
+  tests do not look at it (the held class is found by hash).

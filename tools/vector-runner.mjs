@@ -26,7 +26,7 @@ export const OUTPUTS = {
   entitlement: ['entitled', 'reason'], // since spec-0.4.3: the entitlement check (10.3)
   class: ['flattened', 'class_hash'], // since spec-0.5.0: define a class, flattened and hashed (16.2)
   normalisation: [], // since spec-0.5.0: a valid vector is canonical under its rule (16.4); no outputs
-  key: ['decoded'], // since spec-0.5.0: an object key string decoded (16.5)
+  key: ['decoded', 'object', 'object_id'], // since spec-0.5.0: an object key string decoded (16.5); object and object_id only for a vector given class_hash (c8896ad)
   describe: [], // since spec-0.5.0: a describe answer passes 16.8; no outputs
   define: ['canonical', 'sha256'], // since spec-0.5.0: the define-time check of a function (2.5)
 };
@@ -184,10 +184,17 @@ export function makeRunner(lib, sha256) {
           const again = lib.formatObjectKey(decoded);
           if (again !== v.input) throw new Error(`formatObjectKey gave ${again}`);
           out.decoded = decoded;
+          // c8896ad (16.5): a vector given the decoded class's hash also has the object (a class-typed key as the
+          // typed string scalar of its encoding) and its id. objectJson/objectId take the decoded key plus class_hash.
+          if (v.class_hash !== undefined) {
+            const bytes = lib.objectJson({ ...decoded, class_hash: v.class_hash });
+            out.object = JSON.parse(text(bytes));
+            out.object_id = lib.objectId({ ...decoded, class_hash: v.class_hash });
+          }
           break;
         }
         case 'describe':
-          lib.checkDescribe(v.input, v.classes);
+          lib.checkDescribe(v.input, v.classes, v.functions); // c8896ad (16.8 step 6): the method functions held, when the vector has them
           break;
         case 'define': {
           const r = lib.checkDefine(v.input, v.name);

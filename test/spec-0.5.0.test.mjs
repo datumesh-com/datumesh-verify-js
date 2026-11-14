@@ -74,8 +74,8 @@ test('versions name spec-0.5.0 and 0.5.0', () => {
   assert.equal(pkg.datumesh.spec, 'spec-0.5.0');
 });
 
-test('the spec submodule is spec-0.5.0 (7bed002) and the set has 1426 vectors', () => {
-  assert.equal(all.length, 1426);
+test('the spec submodule is spec-0.5.0 (c8896ad) and the set has 1474 vectors', () => {
+  assert.equal(all.length, 1474);
   assert.ok(readFileSync(join(root, 'spec', 'SPEC.md'), 'utf8').startsWith('# Datumesh protocol, version 1\n\nStatus: draft, revision `spec-0.5.0`'));
 });
 
@@ -234,7 +234,7 @@ const envelopeVectors = idsWhere((v) => v.kind === 'envelope' && /spec-0\.5\.0/.
 const check = (v, body, status = v.status, request = v.request) => checkEnvelope(status, typeof body === 'string' ? body : JSON.stringify(body), keysOf(v), request);
 
 test('item 3: the new envelope vectors', async () => {
-  assert.equal(envelopeVectors.length, 19);
+  assert.equal(envelopeVectors.length, 25); // c8896ad: + 6 (re-pin 1, 2)
   await conforms(envelopeVectors);
 });
 
@@ -388,12 +388,12 @@ test('item 3: E_SHORT_ID_AMBIGUOUS in bad_request only (16.8)', () => {
 
 test('item 3: the define and write codes appear in no read envelope; an error envelope carries no define, class or describe code', () => {
   const v = byId['envelope/error-500'];
-  const NOT = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE'];
+  const NOT = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE'];
   for (const c of ERROR_CODES) assert.equal(check(v, { outcome: 'error', error: c }, 503).code, NOT.includes(c) ? 'E_ENVELOPE' : 'OK', c);
   for (const outcome of ['error', 'bad_request', 'unlicensed', 'payment_required']) for (const c of ['E_UNROOTED_INPUT']) assert.notEqual(check(v, { outcome, error: c }, { error: 500, bad_request: 400, unlicensed: 403, payment_required: 402 }[outcome]).code, 'OK', `${outcome} ${c}`);
-  // bad_request carries the parse codes, E_CANON_HEX, E_SLICE_AT_CELL and (since spec-0.5.0) E_SHORT_ID_AMBIGUOUS.
+  // bad_request carries the parse codes, E_CANON_HEX, E_SLICE_AT_CELL and (since spec-0.5.0) the key codes and E_SHORT_ID_AMBIGUOUS (c8896ad: RS-b, PY-1).
   const ok400 = ERROR_CODES.filter((c) => check(v, { outcome: 'bad_request', error: c }, 400).code === 'OK');
-  assert.deepEqual(ok400, ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_HEX', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING', 'E_SLICE_AT_CELL', 'E_SHORT_ID_AMBIGUOUS']);
+  assert.deepEqual(ok400, ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_HEX', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING', 'E_SLICE_AT_CELL', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS']);
 });
 
 test('item 3: the lookup resolution kind (16.7, D93) and its asof', () => {
@@ -533,8 +533,8 @@ test('item 4: probes agree with the reference tool (key_normalisation, classes, 
 const classVectors = all.filter((v) => v.kind === 'class');
 const classEnv = (v, over = {}) => ({ ...v.env, ...over });
 
-test('item 5: the class vectors (12 valid, 32 invalid)', async () => {
-  assert.equal(classVectors.length, 44);
+test('item 5: the class vectors (12 valid, 33 invalid)', async () => {
+  assert.equal(classVectors.length, 45);
   await conforms(classVectors.map((v) => v.id));
 });
 
@@ -725,7 +725,7 @@ test('item 5: probes agree with the reference tool (16.1 members, 16.2 order and
 // Item 6: key normalisation (16.4)
 // ------------------------------------------------------------------------------------------
 
-test('item 6: the normalisation vectors (8 valid, 9 invalid)', async () => {
+test('item 6: the normalisation vectors (9 valid, 15 invalid)', async () => {
   await conforms(idsWhere((v) => v.kind === 'normalisation'));
 });
 
@@ -733,14 +733,15 @@ test('item 6: each rule of the closed list (16.4)', () => {
   const ok = (rule, s) => codeOf(() => lib.checkKeyNormalisation(rule, s));
   // none: any string, the empty one too
   for (const s of ['', 'x y', 'é', '‍', ' ']) assert.equal(ok('none', s), 'OK', JSON.stringify(s));
-  // every rule but none rejects the empty string and a value that is not NFC
+  // every rule but none rejects the empty string; a value that is not NFC is not a string value by 3.5: E_CANON_STRING under every rule (c8896ad, JS-2)
   for (const rule of ['upper_ascii', 'nfc_strict', 'arabic_skeleton', 'hebrew_consonantal', 'greek_unaccented']) {
     assert.equal(ok(rule, ''), 'E_KEY_NORMALISATION', `${rule} empty`);
-    assert.equal(ok(rule, 'é'), 'E_KEY_NORMALISATION', `${rule} not NFC`);
+    assert.equal(ok(rule, 'é'), 'E_CANON_STRING', `${rule} not NFC`);
   }
   // upper_ascii: printable ASCII U+0021 to U+007E and no lowercase letter
   for (const s of ['EUR', '1M', 'XAMS:ASML', '~!', '`', '{', '@', '[']) assert.equal(ok('upper_ascii', s), 'OK', s);
-  for (const s of ['eur', 'EUr', 'EUR ', ' EUR', 'E UR', 'É', 'EUR\n', '\x7f', '\x1f', 'Ａ']) assert.equal(ok('upper_ascii', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
+  for (const s of ['eur', 'EUr', 'EUR ', ' EUR', 'E UR', 'É', 'Ａ']) assert.equal(ok('upper_ascii', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
+  for (const s of ['EUR\n', '\x7f', '\x1f']) assert.equal(ok('upper_ascii', s), 'E_CANON_STRING', JSON.stringify(s)); // a control character: 3.5 first (c8896ad, JS-2)
   // nfc_strict: no format character, no line or paragraph separator, no space but U+0020, no leading, trailing or repeated U+0020
   for (const s of ['a b', 'é', '가', 'x']) assert.equal(ok('nfc_strict', s), 'OK', s);
   for (const s of ['a  b', ' a', 'a ', 'a b', 'a b', 'a b', 'a‍b', 'a​b', '﻿', '­', 'a　b', 'a b']) assert.equal(ok('nfc_strict', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
@@ -748,7 +749,7 @@ test('item 6: each rule of the closed list (16.4)', () => {
   for (const s of ['بسم ٱلله', '؛', '٠', '۝', '۞', '۩', 'ۮ', 'abc']) assert.equal(ok('arabic_skeleton', s), 'OK', JSON.stringify(s));
   for (const s of ['بَ', 'ـ', 'ٰ', 'ؐ', 'ؚ', 'ً', 'ٟ', 'ۖ', 'ۜ', '۟', 'ۨ', '۪', 'ۭ']) assert.equal(ok('arabic_skeleton', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
   // hebrew_consonantal: no point or accent U+0591-U+05C7 except maqaf U+05BE, paseq U+05C0, sof pasuq U+05C3, nun hafukha U+05C6
-  for (const s of ['בראשית', 'את־השמים', '־', '׀', '׃', '׆', '׈']) assert.equal(ok('hebrew_consonantal', s), 'OK', JSON.stringify(s));
+  for (const s of ['בראשית', 'את־השמים', '־', '׀', '׃', '׆']) assert.equal(ok('hebrew_consonantal', s), 'OK', JSON.stringify(s));
   for (const s of ['בְ', '֑', 'ֽ', 'ֿ', 'ׁ', 'ׂ', 'ׄ', 'ׅ', 'ׇ']) assert.equal(ok('hebrew_consonantal', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
   // greek_unaccented: no combining mark U+0300-U+036F in its NFD form
   for (const s of ['λογος', 'Ͱ', 'Ω']) assert.equal(ok('greek_unaccented', s), 'OK', s);
@@ -772,7 +773,7 @@ test('item 6: probes agree with the reference tool', async () => {
 // Item 7: object keys (16.5)
 // ------------------------------------------------------------------------------------------
 
-test('item 7: the key vectors (5 valid, 6 invalid)', async () => {
+test('item 7: the key vectors (7 valid, 10 invalid)', async () => {
   await conforms(idsWhere((v) => v.kind === 'key'));
 });
 
@@ -837,7 +838,7 @@ test('item 7: probes agree with the reference tool (key encodings)', async () =>
 // Item 8: describe (16.8)
 // ------------------------------------------------------------------------------------------
 
-test('item 8: the describe vectors (2 valid, 6 invalid)', async () => {
+test('item 8: the describe vectors (6 valid, 18 invalid)', async () => {
   await conforms(idsWhere((v) => v.kind === 'describe'));
 });
 
@@ -1008,12 +1009,13 @@ test('item 10: the runner runs the new kinds and skips the same five', async () 
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
   for (const k of ['class', 'normalisation', 'key', 'describe', 'define', 'envelope', 'mesh', 'function', 'licence', 'entitlement']) assert.equal(SKIPPED_KINDS.includes(k), false, k);
   assert.deepEqual(OUTPUTS.class, ['flattened', 'class_hash']);
-  assert.deepEqual(OUTPUTS.key, ['decoded']);
+  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id']); // c8896ad: the last two for a vector given class_hash
   assert.deepEqual(OUTPUTS.define, ['canonical', 'sha256']);
   assert.deepEqual([OUTPUTS.normalisation, OUTPUTS.describe], [[], []]);
   for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && x.valid)) {
     const got = await run(v);
-    assert.deepEqual(Object.keys(got).sort(), ['error', 'id', ...OUTPUTS[v.kind]].sort(), v.id);
+    const outputs = v.kind === 'key' && v.class_hash === undefined ? ['decoded'] : OUTPUTS[v.kind];
+    assert.deepEqual(Object.keys(got).sort(), ['error', 'id', ...outputs].sort(), v.id);
     assert.equal(got.error, null, v.id);
   }
   for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && !x.valid)) assert.deepEqual(await run(v), { id: v.id, error: v.error }, v.id);
@@ -1049,4 +1051,493 @@ test('the old vectors still conform (the conformance test is the full run; this 
   const bad = [];
   for (const v of older) if (compare(v, await run(v)).length) bad.push(v.id);
   assert.deepEqual(bad.slice(0, 10), []);
+});
+
+// ==========================================================================================
+// Re-pin to spec c8896ad (CONTRACT-0.5.0-libs-repin.md, SPEC 14 "Library findings (verifier
+// libraries, spec-0.5.0)", points 1-8). Spec c8896ad is 6d5633e plus 8 formula-evaluator vectors,
+// so a verifier library runs 818 of 1474 vectors. One block per re-pin point, in the contract's
+// order. IMPL-NOTES-0.5.0.md "Re-pin to c8896ad" maps each test to its point and section.
+//
+// TEST-FIRST COMMIT: the tests of points 1, 2, 3, 5 and 6 fail until the library follows the
+// text; the tests of 4, 7 and 8 pin what the library already does (the findings of other libraries).
+// ==========================================================================================
+
+const REQUEST_STATUS = { error: 500, bad_request: 400, not_covered: 404, unlicensed: 403, payment_required: 402 };
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 1: E_KEY_NORMALISATION and E_KEY_ENCODING are bad_request codes (5.5, 5.8, 10.2)
+// ------------------------------------------------------------------------------------------
+
+test('re-pin 1: the four key-code envelope vectors (2 valid bad_request, 2 invalid in error)', async () => {
+  await conforms(['envelope/bad-request-key-normalisation', 'envelope/bad-request-key-encoding', 'invalid/envelope-key-normalisation-in-error', 'invalid/envelope-key-encoding-in-error']);
+  for (const id of ['envelope/bad-request-key-normalisation', 'envelope/bad-request-key-encoding']) assert.equal(byId[id].valid, true, id);
+  for (const id of ['invalid/envelope-key-normalisation-in-error', 'invalid/envelope-key-encoding-in-error']) assert.equal(byId[id].error, 'E_ENVELOPE', id);
+});
+
+test('re-pin 1: the key codes are bad_request codes at 400, and in no other outcome', () => {
+  const v = byId['envelope/bad-request-key-encoding'];
+  for (const code of ['E_KEY_NORMALISATION', 'E_KEY_ENCODING']) {
+    const r = check(v, { outcome: 'bad_request', error: code }, 400);
+    assert.equal(r.ok, true, code);
+    assert.equal(r.outcome, 'bad_request');
+    assert.equal(r.error, code);
+    for (const status of [200, 404, 500]) assert.equal(check(v, { outcome: 'bad_request', error: code }, status).code, 'E_ENVELOPE', `${code} at ${status}`);
+    for (const outcome of ['error', 'not_covered', 'unlicensed', 'payment_required']) {
+      const body = { outcome, error: code, ...(outcome === 'payment_required' ? { quote: { price: '1', currency: 'EUR' } } : {}) };
+      assert.equal(check(v, body, REQUEST_STATUS[outcome]).code, 'E_ENVELOPE', `${code} in ${outcome}`);
+    }
+  }
+});
+
+test('re-pin 1: bad_request carries exactly the parse codes, E_CANON_HEX, E_SLICE_AT_CELL, E_SHORT_ID_AMBIGUOUS and the two key codes (5.5)', () => {
+  const v = byId['envelope/bad-request-key-encoding'];
+  const ok400 = ERROR_CODES.filter((c) => check(v, { outcome: 'bad_request', error: c }, 400).code === 'OK');
+  assert.deepEqual(ok400, ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_HEX', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING', 'E_SLICE_AT_CELL', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS']);
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 2: the exact list of codes an error envelope may not carry (5.5, 10.2)
+// ------------------------------------------------------------------------------------------
+
+test('re-pin 2: an error envelope carries every code of 10.2 except exactly the 18 listed', () => {
+  const v = byId['envelope/error-500'];
+  const NOT_IN_ERROR = ['E_ENVELOPE', 'E_DESCRIBE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED',
+    'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER'];
+  assert.equal(NOT_IN_ERROR.length, 18); // the client's 2, the request codes 6 (E_JOB_UNKNOWN, E_SLICE_AT_CELL, E_NAME_UNBOUND, E_SHORT_ID_AMBIGUOUS and the two key codes), the define and write codes 10
+  for (const c of NOT_IN_ERROR) assert.ok(ERROR_CODES.includes(c), c);
+  for (const c of ERROR_CODES) {
+    // E_FOREIGN_UNAVAILABLE is allowed in `error`, with status 502 and a `detail` (5.5)
+    const body = c === 'E_FOREIGN_UNAVAILABLE' ? { outcome: 'error', error: c, detail: 'offline' } : { outcome: 'error', error: c };
+    const status = c === 'E_FOREIGN_UNAVAILABLE' ? 502 : 500;
+    assert.equal(check(v, body, status).code, NOT_IN_ERROR.includes(c) ? 'E_ENVELOPE' : 'OK', c);
+  }
+  // the two key codes are the ones the library let through before c8896ad
+  for (const c of ['E_KEY_NORMALISATION', 'E_KEY_ENCODING']) for (const status of [500, 503, 599]) assert.equal(check(v, { outcome: 'error', error: c }, status).code, 'E_ENVELOPE', `${c} ${status}`);
+});
+
+test('re-pin 2: the invalid error-envelope vectors of the list (class code, E_DESCRIBE, key codes) are E_ENVELOPE', async () => {
+  await conforms(['invalid/envelope-class-code-in-error', 'invalid/envelope-describe-in-error', 'invalid/envelope-key-normalisation-in-error', 'invalid/envelope-key-encoding-in-error', 'invalid/envelope-short-id-in-error']);
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 3: 16.4: a key value is first a string value by 3.5; none accepts ""; nfc_strict's spaces
+// ------------------------------------------------------------------------------------------
+
+const RULES = ['none', 'upper_ascii', 'nfc_strict', 'arabic_skeleton', 'hebrew_consonantal', 'greek_unaccented'];
+const normCode = (rule, s) => codeOf(() => lib.checkKeyNormalisation(rule, s));
+
+test('re-pin 3: the normalisation vectors of c8896ad (none empty; none with tab, LF, NUL, NFD; nfc_strict U+00A0; upper_ascii empty)', async () => {
+  await conforms(['normalisation/none-empty', 'invalid/normalisation-none-tab', 'invalid/normalisation-none-newline', 'invalid/normalisation-none-nul', 'invalid/normalisation-none-nfd', 'invalid/normalisation-nfc-strict-nbsp', 'invalid/normalisation-upper-ascii-empty']);
+  assert.equal(byId['invalid/normalisation-none-tab'].error, 'E_CANON_STRING');
+  assert.equal(byId['invalid/normalisation-nfc-strict-nbsp'].error, 'E_KEY_NORMALISATION');
+  assert.equal(byId['invalid/normalisation-upper-ascii-empty'].error, 'E_KEY_NORMALISATION');
+});
+
+test('re-pin 3: under every rule a key value is first a string value (3.5): E_CANON_STRING for a control character, an unassigned code point or a non-NFC string', () => {
+  for (const rule of RULES) {
+    for (const [what, s] of [['tab', 'a\tb'], ['line feed', 'EUR\n'], ['carriage return', 'a\rb'], ['NUL', 'a\0b'], ['DEL', '\x7f'], ['U+0085', 'a\x85b'], ['U+009F', '\x9f'], ['NFD', 'e\u0301'], ['unassigned U+0378', 'a\u0378'], ['lone surrogate', 'a\ud800']]) {
+      assert.equal(normCode(rule, s), 'E_CANON_STRING', `${rule}: ${what}`);
+    }
+    // 3.5's order: characters, then NFC, then length; a 1025-byte string with a control character is E_CANON_STRING
+    assert.equal(normCode(rule, `\t${'A'.repeat(1030)}`), 'E_CANON_STRING', `${rule}: control character first`);
+  }
+});
+
+test('re-pin 3: under every rule a key value over 1024 bytes is E_CANON_LIMIT (3.5), never E_KEY_NORMALISATION', () => {
+  for (const rule of RULES) {
+    assert.equal(normCode(rule, 'A'.repeat(1025)), 'E_CANON_LIMIT', rule);
+    assert.equal(normCode(rule, '\u00e9'.repeat(513)), 'E_CANON_LIMIT', `${rule}: 1026 bytes in 513 characters`);
+  }
+  assert.equal(normCode('none', 'A'.repeat(1024)), 'OK');
+  assert.equal(normCode('upper_ascii', 'A'.repeat(1024)), 'OK');
+  assert.equal(normCode('none', '\u00e9'.repeat(512)), 'OK'); // 1024 bytes
+});
+
+test('re-pin 3: none accepts every string valid by 3.5, the empty string included; every other rule rejects the empty string', () => {
+  for (const s of ['', ' ', '  a  ', 'EUR', 'eur', '\u200d', '\u00a0', '\u2028', '\ufeff', '\ue000', 'e\u0301'.normalize('NFC')]) assert.equal(normCode('none', s), 'OK', JSON.stringify(s));
+  for (const rule of RULES.slice(1)) assert.equal(normCode(rule, ''), 'E_KEY_NORMALISATION', rule);
+});
+
+test('re-pin 3: nfc_strict refuses each Unicode 15.1 White_Space character but U+0020 (rule), or 3.5 refuses it first (controls, U+2000, U+2001)', () => {
+  // refused by the rule: valid string values (assigned, NFC, not controls)
+  const byRule = [0x00a0, 0x1680, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000];
+  for (const cp of byRule) {
+    const c = String.fromCodePoint(cp);
+    for (const s of [`a${c}b`, c, `${c}a`, `a${c}`]) assert.equal(normCode('nfc_strict', s), 'E_KEY_NORMALISATION', `U+${cp.toString(16)} in ${JSON.stringify(s)}`);
+    assert.equal(normCode('none', `a${c}b`), 'OK', `none accepts U+${cp.toString(16)}`);
+  }
+  // refused by 3.5 first: the controls U+0009-U+000D and U+0085, and U+2000 and U+2001, which are not NFC
+  for (const cp of [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x85, 0x2000, 0x2001]) assert.equal(normCode('nfc_strict', `a${String.fromCodePoint(cp)}b`), 'E_CANON_STRING', `U+${cp.toString(16)}`);
+  // U+0020 itself: allowed inside, not leading, trailing or repeated
+  assert.equal(normCode('nfc_strict', 'a b'), 'OK');
+  for (const s of [' a', 'a ', 'a  b', ' ']) assert.equal(normCode('nfc_strict', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
+  // format characters (Cf) are still refused; characters that are not White_Space are not
+  for (const cp of [0x00ad, 0x200b, 0x200d, 0x2060, 0xfeff, 0x180e]) assert.equal(normCode('nfc_strict', `a${String.fromCodePoint(cp)}b`), 'E_KEY_NORMALISATION', `Cf U+${cp.toString(16)}`);
+  assert.equal(normCode('nfc_strict', 'a\u2800b'), 'OK'); // BRAILLE PATTERN BLANK is not White_Space
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 4: an unknown rule: E_CLASS_MEMBER in a class key, E_SCHEMA on a function argument; empty classes E_CANON_SET (16.1, 7)
+// ------------------------------------------------------------------------------------------
+
+test('re-pin 4: the four function vectors and the class-lookup vector of c8896ad', async () => {
+  await conforms(['invalid/function-classes-empty', 'invalid/function-returns-classes-empty', 'invalid/function-key-normalisation-unknown', 'invalid/function-key-normalisation-none-number', 'invalid/class-lookup-keys-only']);
+});
+
+test('re-pin 4: on a function argument an unknown rule is E_SCHEMA, checked before the type; a real rule on another type is E_CANON_TYPE', () => {
+  for (const bad of ['bogus', 'NONE', 'Upper_Ascii', 'upper-ascii', 'nfc', 'none ']) {
+    assert.equal(fnCode(fnWith((a) => (a.isin.key_normalisation = bad))), 'E_SCHEMA', `string argument: ${bad}`);
+    for (const type of ['date', 'boolean', 'blob']) assert.equal(fnCode(fnWith((a, s) => ((a.x = { type, valid: false, key_normalisation: bad }), s.order.push('x')))), 'E_SCHEMA', `${type} argument: ${bad}`);
+    assert.equal(fnCode(fnWith((a, s) => ((a.n = { type: 'number', unit: '1', valid: false, key_normalisation: bad }), s.order.push('n')))), 'E_SCHEMA', `number argument: ${bad}`);
+  }
+  // "none" written out is not a rule of the descriptor: E_SCHEMA on a string argument, and on a number argument before E_CANON_TYPE
+  assert.equal(fnCode(fnWith((a, s) => ((a.n = { type: 'number', unit: '1', valid: false, key_normalisation: 'none' }), s.order.push('n')))), 'E_SCHEMA');
+  for (const rule of ['upper_ascii', 'nfc_strict', 'arabic_skeleton', 'hebrew_consonantal', 'greek_unaccented']) assert.equal(fnCode(fnWith((a, s) => ((a.n = { type: 'number', unit: '1', valid: false, key_normalisation: rule }), s.order.push('n')))), 'E_CANON_TYPE', rule);
+});
+
+test('re-pin 4: an empty classes, in an argument or in a return, is E_CANON_SET', () => {
+  assert.equal(fnCode(fnWith((a) => ((a.isin.classes = []), delete a.isin.key_normalisation))), 'E_CANON_SET');
+  assert.equal(fnCode(fnWith((a, s) => (s.returns = { type: 'string', classes: [] }))), 'E_CANON_SET');
+  assert.equal(fnCode(fnWith((a, s) => (s.returns = { type: 'string', classes: ['a.example.org/k'] }))), 'OK');
+  // an empty classes is checked after the names: an empty list has none to be bad, a bad name in a non-empty list is E_CANON_NAME
+  assert.equal(fnCode(fnWith((a) => ((a.isin.classes = ['Bad']), delete a.isin.key_normalisation))), 'E_CANON_NAME');
+});
+
+test('re-pin 4: in a class key an unknown rule is E_CLASS_MEMBER (16.1); none is a rule there', () => {
+  const v = byId['class/fx-pair'];
+  const withKeyRule = (rule) => {
+    const d = JSON.parse(v.input);
+    d.keys.base.key_normalisation = rule;
+    return codeOf(() => lib.defineClass(d, v.name, v.env));
+  };
+  for (const bad of ['bogus', 'NONE', 'upper-ascii', '']) assert.equal(withKeyRule(bad), 'E_CLASS_MEMBER', JSON.stringify(bad));
+  // a key declared `none` is allowed: the methods' functions then carry no rule on that argument (absent means none), 16.2 step 6
+  const d = JSON.parse(v.input);
+  d.keys.base.key_normalisation = 'none';
+  const env = structuredClone(v.env);
+  const rate = env.functions.find((f) => functionHash(f) === d.methods.rate);
+  assert.ok(rate);
+  delete rate.signature.args.base.key_normalisation;
+  d.methods.rate = functionHash(rate);
+  assert.equal(codeOf(() => lib.defineClass(d, v.name, env)), 'OK');
+  // while the method still carries upper_ascii on that key, the rules differ: E_CLASS_METHOD
+  const d2 = JSON.parse(v.input);
+  d2.keys.base.key_normalisation = 'none';
+  assert.equal(codeOf(() => lib.defineClass(d2, v.name, v.env)), 'E_CLASS_METHOD');
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 5: the describe check is six numbered steps (16.8)
+// ------------------------------------------------------------------------------------------
+
+const describeVectors = idsWhere((v) => v.kind === 'describe');
+const callOf = (o) => `${o.class}(${Object.keys(o.keys).sort().map((k) => `${k}: ${o.keys[k].type === 'string' ? `"${o.keys[k].value.replaceAll('"', '""')}"` : o.keys[k].value}`).join(', ')})`;
+/** An object answer for `a` with `f` applied to its object and the ids and call form recomputed, so that only step 5 can fail. */
+const objectAnswer = (a, f) => {
+  const b = structuredClone(a);
+  f(b.object);
+  b.object_id = lib.objectId(b.object);
+  b.short_id = b.object_id.slice(0, 12);
+  b.call = callOf(b.object);
+  return b;
+};
+
+test('re-pin 5: all 24 describe vectors (6 valid, 18 invalid) run, with the method functions when the vector has them', async () => {
+  assert.equal(describeVectors.length, 24);
+  await conforms(describeVectors);
+  assert.deepEqual(describeVectors.filter((id) => byId[id].functions !== undefined).sort(), ['describe/class-functions', 'invalid/describe-class-args', 'invalid/describe-class-returns']);
+});
+
+test('re-pin 5: step 1, parse: the parse codes are their own, not E_DESCRIBE (6.1)', () => {
+  const c = byId['describe/class'];
+  assert.equal(codeOf(() => lib.checkDescribe('{"kind": "object",', c.classes)), 'E_PARSE_JSON');
+  assert.equal(codeOf(() => lib.checkDescribe('', c.classes)), 'E_PARSE_JSON');
+  assert.equal(codeOf(() => lib.checkDescribe('\ufeff' + c.input, c.classes)), 'E_PARSE_JSON');
+  assert.equal(codeOf(() => lib.checkDescribe('{"kind": "class", "kind": "class"}', c.classes)), 'E_PARSE_DUPLICATE_KEY');
+  assert.equal(codeOf(() => lib.checkDescribe('{"kind": "class", "\\u006bind": "class"}', c.classes)), 'E_PARSE_DUPLICATE_KEY'); // compared after unescaping
+  assert.equal(codeOf(() => lib.checkDescribe(`${'['.repeat(65)}${']'.repeat(65)}`, c.classes)), 'E_PARSE_JSON');
+  assert.equal(codeOf(() => lib.checkDescribe('{"kind": NaN}', c.classes)), 'E_PARSE_JSON');
+  // a parse failure comes before the shape: JSON that parses but has the wrong shape is E_DESCRIBE
+  assert.equal(codeOf(() => lib.checkDescribe('{"kind": "class"}', c.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(new TextEncoder().encode('{"kind": "object",'), c.classes)), 'E_PARSE_JSON');
+});
+
+test('re-pin 5: step 4, the held class is found by class_hash and never by name', () => {
+  const o = byId['describe/object'];
+  const a = JSON.parse(o.input);
+  const verse = o.classes['scripture.example.org/verse'];
+  assert.equal(lib.classHash(verse), a.object.class_hash);
+  // held under another name: still found, so its key types are checked (step 5)
+  const renamed = { 'unrelated.example.org/name': verse, 'rates.example.org/fx_pair': o.classes['rates.example.org/fx_pair'] };
+  assert.equal(codeOf(() => lib.checkDescribe(a, renamed)), 'OK');
+  const wrongType = objectAnswer(a, (obj) => (obj.keys.book = { type: 'number', value: '1' }));
+  assert.equal(codeOf(() => lib.checkDescribe(wrongType, o.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(wrongType, renamed)), 'E_DESCRIBE', 'a held class is found by its hash, whatever name the caller files it under');
+  assert.equal(codeOf(() => lib.checkDescribe(wrongType, { 'x.example.org/y': verse })), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(wrongType, {})), 'OK', 'nothing held: only steps 1-3 are checked, and the ids and call follow from the object');
+  // the answer's class name is not a lookup key: a held class of that name but another hash is not the held class
+  const n = byId['describe/object-not-held'];
+  const na = JSON.parse(n.input);
+  assert.equal(codeOf(() => lib.checkDescribe(na, n.classes)), 'OK');
+  const clash = objectAnswer(na, (obj) => (obj.class = 'scripture.example.org/verse')); // class_hash is still cdcd...: not the held verse class
+  assert.equal(codeOf(() => lib.checkDescribe(clash, n.classes)), 'OK', 'same name as a held class, another hash: not held');
+});
+
+test('re-pin 5: step 4, a client holding no class stops after step 3 (the answer\'s ids, short id and call form)', async () => {
+  await conforms(['describe/object-not-held', 'invalid/describe-object-not-held-call']);
+  const n = byId['describe/object-not-held'];
+  const a = JSON.parse(n.input);
+  assert.deepEqual(lib.checkDescribe(a, {}), { kind: 'object' });
+  for (const f of [(b) => (b.call = 'bible.example.org/passage(osis: "Gen.1.2")'), (b) => (b.object_id = 'ab'.repeat(32)), (b) => (b.short_id = 'abababababab'), (b) => (b.call = 'bible.example.org/passage(osis:"Gen.1.1")')]) {
+    const b = structuredClone(a);
+    f(b);
+    assert.equal(codeOf(() => lib.checkDescribe(b, {})), 'E_DESCRIBE');
+    assert.equal(codeOf(() => lib.checkDescribe(b, n.classes)), 'E_DESCRIBE');
+  }
+  // a normalisation that the held class would refuse is not checked when that class is not held
+  const o = byId['invalid/describe-object-key-normalisation'];
+  assert.equal(codeOf(() => lib.checkDescribe(o.input, o.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(o.input, {})), 'OK');
+});
+
+test('re-pin 5: step 5, an object answer against the held class: key names, types and normalisations, and methods', () => {
+  await_(['invalid/describe-object-key-names', 'invalid/describe-object-key-type', 'invalid/describe-object-key-normalisation']);
+  const o = byId['describe/object'];
+  const a = JSON.parse(o.input);
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => (obj.keys.extra = { type: 'string', value: 'x' })), o.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => delete obj.keys.verse), o.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => (obj.keys.verse = { type: 'string', value: '1' })), o.classes)), 'E_DESCRIBE');
+  // a string key is canonical under its key's normalisation (16.4): here the held fx_pair says upper_ascii
+  const f = byId['describe/class'];
+  const fa = JSON.parse(byId['invalid/describe-object-key-normalisation'].input);
+  const good = objectAnswer(fa, (obj) => (obj.keys.base.value = 'EUR'));
+  assert.equal(codeOf(() => lib.checkDescribe(good, f.classes)), 'OK');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(fa, (obj) => (obj.keys.base.value = 'EUr')), f.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(fa, (obj) => (obj.keys.base.value = '')), f.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(fa, (obj) => (obj.keys.base.value = '')), {})), 'OK');
+});
+
+test('re-pin 5: step 5 and 6, args and returns are checked only against the method functions the client holds', async () => {
+  await conforms(['describe/class-args-unchecked', 'describe/class-functions', 'invalid/describe-class-args', 'invalid/describe-class-returns']);
+  const bad = byId['invalid/describe-class-args'];
+  const badReturns = byId['invalid/describe-class-returns'];
+  // checkDescribe takes the method functions' descriptors as an optional third argument
+  assert.equal(codeOf(() => lib.checkDescribe(bad.input, bad.classes, bad.functions)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(badReturns.input, badReturns.classes, badReturns.functions)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(bad.input, bad.classes)), 'OK', 'no functions held: args and returns are not checked');
+  assert.equal(codeOf(() => lib.checkDescribe(bad.input, bad.classes, [])), 'OK');
+  assert.equal(codeOf(() => lib.checkDescribe(badReturns.input, badReturns.classes)), 'OK');
+  assert.equal(codeOf(() => lib.checkDescribe(badReturns.input, badReturns.classes, [])), 'OK');
+  // a method whose descriptor the client does not hold (by its fn_hash) is not checked
+  const rate = JSON.parse(bad.input).methods.rate.fn_hash;
+  const without = (fs) => fs.filter((f) => functionHash(f) !== rate);
+  assert.equal(without(bad.functions).length, bad.functions.length - 1);
+  assert.equal(codeOf(() => lib.checkDescribe(bad.input, bad.classes, without(bad.functions))), 'OK');
+  assert.equal(codeOf(() => lib.checkDescribe(badReturns.input, badReturns.classes, without(badReturns.functions))), 'OK');
+  // the matching answer passes with every function held
+  const good = byId['describe/class-functions'];
+  assert.deepEqual(lib.checkDescribe(good.input, good.classes, good.functions), { kind: 'class' });
+  assert.deepEqual(lib.checkDescribe(good.input, good.classes), { kind: 'class' });
+  // args: exactly the function's arguments after the class keys; any difference is E_DESCRIBE
+  const a = JSON.parse(good.input);
+  const edit = (m, f) => {
+    const b = structuredClone(a);
+    f(b.methods[m]);
+    return codeOf(() => lib.checkDescribe(b, good.classes, good.functions));
+  };
+  assert.equal(edit('rate', () => {}), 'OK');
+  assert.equal(edit('rate', (e) => (e.args.extra = { type: 'string', valid: false })), 'E_DESCRIBE');
+  assert.equal(edit('rate', (e) => (e.args.date.valid = false)), 'E_DESCRIBE');
+  assert.equal(edit('rate', (e) => (e.returns = { type: 'number', unit: '1' })), 'E_DESCRIBE');
+  assert.equal(edit('forward', (e) => delete e.args.tenor), 'E_DESCRIBE');
+  assert.equal(edit('named', (e) => (e.returns = { type: 'string' })), 'E_DESCRIBE');
+});
+
+test('re-pin 5: step 2, a description is 1 to 1024 bytes valid by 3.5 (the empty one is E_DESCRIBE)', async () => {
+  await conforms(['invalid/describe-description-empty']);
+  const v = byId['describe/class'];
+  const a = JSON.parse(v.input);
+  const name = Object.keys(a.methods)[0];
+  const code = (d) => {
+    const b = structuredClone(a);
+    b.methods[name].description = d;
+    return codeOf(() => lib.checkDescribe(b, v.classes));
+  };
+  assert.equal(code('x'), 'OK');
+  assert.equal(code('x'.repeat(1024)), 'OK');
+  for (const d of ['', 'x'.repeat(1025), 'a\tb', 'a\nb', 'e\u0301', 'a\u0378', 5, null, ['x']]) assert.equal(code(d), 'E_DESCRIBE', JSON.stringify(d)?.slice(0, 30));
+  assert.equal(code('\u00e9'.repeat(512)), 'OK');
+  assert.equal(code('\u00e9'.repeat(513)), 'E_DESCRIBE');
+});
+
+test('re-pin 5: step 2, same_as is ascending and unique, at least one object key', async () => {
+  await conforms(['invalid/describe-same-as-duplicate', 'invalid/describe-same-as-unsorted']);
+  const o = byId['describe/object'];
+  const a = JSON.parse(o.input);
+  const A = 'bible.example.org/passage(osis:"Gen.1.1")';
+  const B = 'bible.example.org/passage(osis:"Gen.1.2")';
+  const C = 'bible.example.org/passage(osis:"Gen.1.3")';
+  const code = (same_as, classes = o.classes) => codeOf(() => lib.checkDescribe({ ...a, same_as }, classes));
+  assert.equal(code([A]), 'OK');
+  assert.equal(code([A, B]), 'OK');
+  assert.equal(code([A, B, C]), 'OK');
+  for (const list of [[B, A], [A, A], [A, B, B], [A, C, B], [C, B, A], [A, B, A]]) {
+    assert.equal(code(list), 'E_DESCRIBE', JSON.stringify(list));
+    assert.equal(code(list, {}), 'E_DESCRIBE', `${JSON.stringify(list)} with nothing held`);
+  }
+  assert.equal(code([]), 'E_DESCRIBE');
+  assert.equal(code([A, 'not a key']), 'E_DESCRIBE');
+});
+
+test('re-pin 5: a class-typed key in an object answer is a typed string scalar of its encoding, and its call form quotes it (16.5, 16.8)', async () => {
+  await conforms(['describe/object-class-typed-key']);
+  const v = byId['describe/object-class-typed-key'];
+  const a = JSON.parse(v.input);
+  assert.deepEqual(a.object.keys.base, { type: 'string', value: 'iso.example.org/currency(code:"EUR")' });
+  assert.equal(a.call, 'rates.example.org/ccy_pair(base: "iso.example.org/currency(code:""EUR"")", quote: "iso.example.org/currency(code:""USD"")")');
+  assert.deepEqual(lib.checkDescribe(a, v.classes), { kind: 'object' });
+  const edit = (f) => {
+    const b = structuredClone(a);
+    f(b);
+    return codeOf(() => lib.checkDescribe(b, v.classes));
+  };
+  // a nested object is not a typed scalar
+  assert.equal(edit((b) => (b.object.keys.base = { class: 'iso.example.org/currency', keys: { code: { type: 'string', value: 'EUR' } } })), 'E_DESCRIBE');
+  // the call form is the quoted encoding, not the bare one
+  assert.equal(edit((b) => (b.call = 'rates.example.org/ccy_pair(base: iso.example.org/currency(code:"EUR"), quote: iso.example.org/currency(code:"USD"))')), 'E_DESCRIBE');
+  assert.equal(edit((b) => (b.call = 'rates.example.org/ccy_pair(base: "iso.example.org/currency(code:\\"EUR\\")", quote: "iso.example.org/currency(code:\\"USD\\")")')), 'E_DESCRIBE');
+  // the value of a class-typed key is the encoding of an object of that class (16.5): not an encoding, or another spelling, is E_DESCRIBE when the class is held
+  assert.equal(edit((b) => (b.object = { ...b.object, keys: { ...b.object.keys, base: { type: 'string', value: 'EUR' } } })), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => (obj.keys.base = { type: 'string', value: 'EUR' })), v.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => (obj.keys.base = { type: 'string', value: 'iso.example.org/currency(code: "EUR")' })), v.classes)), 'E_DESCRIBE');
+  assert.equal(codeOf(() => lib.checkDescribe(objectAnswer(a, (obj) => (obj.keys.base = { type: 'string', value: 'iso.example.org/currency(code:"EUR")' })), v.classes)), 'OK');
+});
+
+// the step-5 test above names its vectors through this helper (conformance of the vectors themselves)
+function await_(ids) {
+  for (const id of ids) assert.ok(byId[id] && byId[id].valid === false && byId[id].error === 'E_DESCRIBE', id);
+}
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 6: a class-typed key in the object JSON; nested object ids (16.5)
+// ------------------------------------------------------------------------------------------
+
+test('re-pin 6: the key vectors given class_hash have object and object_id (key/nested-object), and the runner outputs them', async () => {
+  const v = byId['key/nested-object'];
+  assert.ok(v.class_hash && v.object && v.object_id);
+  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id']);
+  await conforms(['key/nested-object', 'key/at-limit']);
+  // a key vector without class_hash has neither
+  for (const x of all.filter((k) => k.kind === 'key' && k.valid && k.class_hash === undefined)) assert.equal(x.object === undefined && x.object_id === undefined, true, x.id);
+  const got = await run(v);
+  assert.deepEqual(got.object, v.object);
+  assert.equal(got.object_id, v.object_id);
+});
+
+test('re-pin 6: the object JSON holds a class-typed key as the typed string scalar of its encoding (16.5)', () => {
+  const v = byId['key/nested-object'];
+  const decoded = lib.parseObjectKey(v.input);
+  // nested keys decode to objects; the object JSON has their encodings as string scalars
+  assert.equal(decoded.keys.base.class, 'iso.example.org/currency');
+  const withHash = { ...decoded, class_hash: v.class_hash };
+  const bytes = lib.objectJson(withHash);
+  assert.equal(text(bytes), '{"class":"rates.example.org/ccy_pair","class_hash":"7dec090c2573450e6e9ee022f0d3c128529afa551c7f9bf47e949f0bfb2937c4","keys":{"base":{"type":"string","value":"iso.example.org/currency(code:\\"EUR\\")"},"quote":{"type":"string","value":"iso.example.org/currency(code:\\"USD\\")"}}}');
+  assert.deepEqual(JSON.parse(text(bytes)), v.object);
+  assert.equal(lib.objectId(withHash), v.object_id);
+  assert.equal(sha256(bytes), v.object_id);
+  assert.equal(v.object_id, 'fcb2180650816aab6614bc0fd855fdec3301e41eab5a6bbcea0970f3cb7a590a'); // the id SPEC 16.5 prints
+  // the JSON form of the same object (typed string scalars) has the same bytes and id
+  assert.equal(text(lib.objectJson(v.object)), text(bytes));
+  assert.equal(lib.objectId(v.object), v.object_id);
+  assert.equal(lib.objectId(JSON.stringify(v.object)), v.object_id);
+  // each key's encoding is the formatted nested object
+  for (const k of ['base', 'quote']) assert.equal(v.object.keys[k].value, lib.formatObjectKey(decoded.keys[k]));
+});
+
+test('re-pin 6: a nested object\'s id: its own object (with its own class hash) has an id, and a nested key adds no member to the parent', () => {
+  const v = byId['key/nested-object'];
+  const base = lib.parseObjectKey(v.input).keys.base;
+  const hashOfCurrency = 'ab'.repeat(32);
+  const nestedObject = { ...base, class_hash: hashOfCurrency };
+  // {"class":"iso.example.org/currency","class_hash":...,"keys":{"code":{"type":"string","value":"EUR"}}}
+  assert.equal(text(lib.objectJson(nestedObject)), `{"class":"iso.example.org/currency","class_hash":"${hashOfCurrency}","keys":{"code":{"type":"string","value":"EUR"}}}`);
+  assert.equal(lib.objectId(nestedObject), sha256(new TextEncoder().encode(`{"class":"iso.example.org/currency","class_hash":"${hashOfCurrency}","keys":{"code":{"type":"string","value":"EUR"}}}`)));
+  // changing the encoding of a nested key changes the parent's id; its spelling is the one canonical spelling
+  const other = lib.parseObjectKey('rates.example.org/ccy_pair(base:iso.example.org/currency(code:"EUR"),quote:iso.example.org/currency(code:"GBP"))');
+  assert.notEqual(lib.objectId({ ...other, class_hash: v.class_hash }), v.object_id);
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 7: a key encoding is at most 1024 bytes as a whole; every decoding failure is E_KEY_ENCODING (16.5)
+// ------------------------------------------------------------------------------------------
+
+const keyOf = (n, ch = 'x') => `a.example.org/k(a:"${ch.repeat(n)}")`;
+const encCode = (s) => codeOf(() => lib.parseObjectKey(s));
+
+test('re-pin 7: the key vectors of c8896ad: at the limit, too long, calendar date, control character, NFD', async () => {
+  await conforms(['key/at-limit', 'invalid/key-too-long', 'invalid/key-date-calendar', 'invalid/key-string-control', 'invalid/key-string-nfd']);
+  assert.equal(Buffer.byteLength(byId['key/at-limit'].input), 1024);
+  assert.equal(Buffer.byteLength(byId['invalid/key-too-long'].input), 1025);
+  for (const id of ['invalid/key-too-long', 'invalid/key-date-calendar', 'invalid/key-string-control', 'invalid/key-string-nfd']) assert.equal(byId[id].error, 'E_KEY_ENCODING', id);
+});
+
+test('re-pin 7: an encoding is one string value: 1024 bytes as a whole, which bounds each string inside it', () => {
+  const overhead = Buffer.byteLength(keyOf(0));
+  assert.equal(Buffer.byteLength(keyOf(1024 - overhead)), 1024);
+  assert.equal(encCode(keyOf(1024 - overhead)), 'OK');
+  assert.equal(lib.formatObjectKey(lib.parseObjectKey(keyOf(1024 - overhead))), keyOf(1024 - overhead));
+  // the string inside is 1003 bytes, within 3.5's limit; the whole is 1025 bytes
+  assert.equal(encCode(keyOf(1025 - overhead)), 'E_KEY_ENCODING');
+  assert.equal(encCode(keyOf(1024)), 'E_KEY_ENCODING');
+  assert.equal(encCode(keyOf(2000)), 'E_KEY_ENCODING');
+  // multi-byte characters count as bytes
+  const m = Math.floor((1024 - overhead) / 2);
+  assert.equal(encCode(keyOf(m, '\u00e9')), 'OK');
+  assert.equal(encCode(keyOf(m + 1, '\u00e9')), 'E_KEY_ENCODING');
+  // several keys: the bound is on the whole, not on each string
+  const two = (n) => `a.example.org/k(a:"${'x'.repeat(n)}",b:"${'y'.repeat(n)}")`;
+  assert.equal(encCode(two(500)), 'OK');
+  assert.equal(encCode(two(507)), 'E_KEY_ENCODING'); // 1025+ bytes, each string far under the limit
+  assert.ok(Buffer.byteLength(two(507)) > 1024);
+  // nested encodings count in the whole
+  const nested = `a.example.org/k(a:b.example.org/c(d:"${'x'.repeat(1000)}"))`;
+  assert.ok(Buffer.byteLength(nested) > 1024);
+  assert.equal(encCode(nested), 'E_KEY_ENCODING');
+});
+
+test('re-pin 7: every failure to decode is E_KEY_ENCODING: dates and instants that are not real, strings that break 3.5, syntax, order, trailing text', () => {
+  const bad = [
+    'a.example.org/k(a:2024-02-30)', 'a.example.org/k(a:2023-02-29)', 'a.example.org/k(a:2024-13-01)', 'a.example.org/k(a:2024-00-10)', 'a.example.org/k(a:2024-04-31)',
+    'a.example.org/k(a:2024-03-15T25:00:00.000000Z)', 'a.example.org/k(a:2024-03-15T09:60:00.000000Z)', 'a.example.org/k(a:2024-02-30T09:00:00.000000Z)', 'a.example.org/k(a:2024-03-15T09:00:00Z)',
+    'a.example.org/k(a:"a\tb")', 'a.example.org/k(a:"a\nb")', 'a.example.org/k(a:"a\0b")', 'a.example.org/k(a:"a\x7fb")', 'a.example.org/k(a:"e\u0301")', 'a.example.org/k(a:"a\u0378")',
+    'a.example.org/k(a:1,a:2)', 'a.example.org/k(b:1,a:2)', 'a.example.org/k(a:1)x', 'a.example.org/k(a:1))', 'a.example.org/k(a:1) ', 'a.example.org/k(a:"x"', 'a.example.org/k(a:"x"y)', 'a.example.org/k(a:b.example.org/c()x)',
+    'a.example.org/k(a:1.0)', 'a.example.org/k(a:00)', 'a.example.org/k(a:NaN)', '', '()', 'a.example.org/k(', 'a.example.org/k(a:)', 'a.example.org/k(:1)',
+    'a.example.org/k(a:b.example.org/c(d:"x"),b:b.example.org/c(d:"e\u0301"))',
+  ];
+  for (const s of bad) assert.equal(encCode(s), 'E_KEY_ENCODING', JSON.stringify(s));
+  // and the same strings with a valid spelling decode
+  for (const s of ['a.example.org/k(a:2024-02-29)', 'a.example.org/k(a:2024-03-15T09:00:00.000000Z)', 'a.example.org/k(a:"a b")', 'a.example.org/k(a:"\u00e9")', 'a.example.org/k(a:-0.5,b:true)', 'a.example.org/k(a:b.example.org/c(d:"x"))']) assert.equal(encCode(s), 'OK', s);
+  assert.equal(encCode('a.example.org/k(a:2023-02-29)'), 'E_KEY_ENCODING');
+  assert.equal(encCode('a.example.org/k(a:2000-02-29)'), 'OK'); // 2000 is a leap year
+  assert.equal(encCode('a.example.org/k(a:1900-02-29)'), 'E_KEY_ENCODING'); // 1900 is not
+});
+
+// ------------------------------------------------------------------------------------------
+// Re-pin 8: the short id of a malformed id is E_CANON_HEX (16.8)
+// ------------------------------------------------------------------------------------------
+
+test('re-pin 8: shortId of a string that is not 64 lowercase hex digits is E_CANON_HEX', () => {
+  const id = byId['describe/object'];
+  const full = JSON.parse(id.input).object_id;
+  assert.equal(lib.shortId(full), full.slice(0, 12));
+  assert.equal(lib.shortId(full), JSON.parse(id.input).short_id);
+  for (const bad of ['', 'a', full.slice(0, 12), full.slice(0, 63), `${full}0`, full.toUpperCase(), `${full.slice(0, 63)}g`, ` ${full.slice(1)}`, `${full.slice(0, 63)}\n`, `0x${full.slice(2)}`, full.replace(/.$/, 'G'), 'z'.repeat(64), `${full.slice(0, 63)}\u0661`]) {
+    assert.equal(codeOf(() => lib.shortId(bad)), 'E_CANON_HEX', JSON.stringify(bad));
+  }
+  // a short id is taken of a full id only: a short id has no short id
+  assert.equal(codeOf(() => lib.shortId(lib.shortId(full))), 'E_CANON_HEX');
+  assert.throws(() => lib.shortId(undefined), TypeError);
+  assert.throws(() => lib.shortId(null), TypeError);
+  assert.throws(() => lib.shortId(12345), TypeError);
 });
