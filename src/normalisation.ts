@@ -1,7 +1,8 @@
 // Key normalisation (SPEC.md 16.4, since spec-0.5.0): the closed list of rules and the pure check
 // of a value under one of them. A value that is not canonical is rejected, never repaired.
 import { DatumeshError, fail } from './errors.js';
-import { codePoints, decomposedCodePoints, isNFC } from './unicode.js';
+import { checkString } from './lexical.js';
+import { codePoints, decomposedCodePoints } from './unicode.js';
 
 /** The closed list of key normalisation rules of 16.4, in the table's order. */
 export const KEY_NORMALISATIONS = ['none', 'upper_ascii', 'nfc_strict', 'arabic_skeleton', 'hebrew_consonantal', 'greek_unaccented'] as const;
@@ -58,18 +59,20 @@ function forbidden(rule: KeyNormalisation, cp: number, cps: readonly number[], i
 }
 
 /**
- * A pure check (16.4): `text` is canonical under `rule`, a rule of KEY_NORMALISATIONS. Every
- * rule but `none` rejects the empty string and a value that is not NFC. Throws DatumeshError
- * E_KEY_NORMALISATION when it is not canonical, E_SCHEMA for a rule outside the list, and
- * TypeError when either argument is not a string.
+ * A pure check (16.4): `text` is canonical under `rule`, a rule of KEY_NORMALISATIONS. A key
+ * value is first a string value by 3.5, under every rule (E_CANON_STRING, E_CANON_LIMIT: a control
+ * character, an unassigned code point, a string not in NFC, over 1024 bytes). Then `none` accepts
+ * it; every other rule rejects the empty string and its own forbidden characters with
+ * E_KEY_NORMALISATION. Throws DatumeshError for a value that is not canonical, E_SCHEMA for a rule
+ * outside the list, and TypeError when either argument is not a string.
  */
 export function checkKeyNormalisation(rule: string, text: string): void {
   if (typeof rule !== 'string') throw new TypeError('rule must be a string');
   if (typeof text !== 'string') throw new TypeError('text must be a string');
   if (!(KEY_NORMALISATIONS as readonly string[]).includes(rule)) fail('E_SCHEMA', `not a key normalisation rule: ${JSON.stringify(rule)}`);
+  checkString(text, '$');
   if (rule === 'none') return;
   if (text === '') fail('E_KEY_NORMALISATION', 'the empty string is not a key', '$');
-  if (!isNFC(text)) fail('E_KEY_NORMALISATION', 'the value is not in Normalization Form C', '$');
   const cps = codePoints(text);
   for (let i = 0; i < cps.length; i++) {
     if (forbidden(rule as KeyNormalisation, cps[i], cps, i)) {

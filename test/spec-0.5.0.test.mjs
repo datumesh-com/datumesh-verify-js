@@ -732,7 +732,7 @@ test('item 6: the normalisation vectors (9 valid, 15 invalid)', async () => {
 test('item 6: each rule of the closed list (16.4)', () => {
   const ok = (rule, s) => codeOf(() => lib.checkKeyNormalisation(rule, s));
   // none: any string, the empty one too
-  for (const s of ['', 'x y', 'é', '‍', ' ']) assert.equal(ok('none', s), 'OK', JSON.stringify(s));
+  for (const s of ['', 'x y', 'é', '‍', ' ']) assert.equal(ok('none', s), 'OK', JSON.stringify(s)); // NFC U+00E9: an NFD value is E_CANON_STRING under none too (3.5 first)
   // every rule but none rejects the empty string; a value that is not NFC is not a string value by 3.5: E_CANON_STRING under every rule (c8896ad, JS-2)
   for (const rule of ['upper_ascii', 'nfc_strict', 'arabic_skeleton', 'hebrew_consonantal', 'greek_unaccented']) {
     assert.equal(ok(rule, ''), 'E_KEY_NORMALISATION', `${rule} empty`);
@@ -753,7 +753,7 @@ test('item 6: each rule of the closed list (16.4)', () => {
   for (const s of ['בְ', '֑', 'ֽ', 'ֿ', 'ׁ', 'ׂ', 'ׄ', 'ׅ', 'ׇ']) assert.equal(ok('hebrew_consonantal', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
   // greek_unaccented: no combining mark U+0300-U+036F in its NFD form
   for (const s of ['λογος', 'Ͱ', 'Ω']) assert.equal(ok('greek_unaccented', s), 'OK', s);
-  for (const s of ['λόγος', 'ά', 'Ϊ', 'ΐ', 'ᾳ', 'ἀ', 'ͅ', '̀', 'ͯ', 'ῶ']) assert.equal(ok('greek_unaccented', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
+  for (const s of ['λόγος', 'ά', 'Ϊ', 'ΐ', 'ᾳ', 'ἀ', 'ͅ', '̀', 'ͯ', 'ῶ']) assert.equal(ok('greek_unaccented', s), 'E_KEY_NORMALISATION', JSON.stringify(s));
 });
 
 test('item 6: the check is pure: it returns nothing, repairs nothing, and misuse is a TypeError', () => {
@@ -1497,7 +1497,8 @@ test('re-pin 7: an encoding is one string value: 1024 bytes as a whole, which bo
   assert.equal(encCode(keyOf(m + 1, '\u00e9')), 'E_KEY_ENCODING');
   // several keys: the bound is on the whole, not on each string
   const two = (n) => `a.example.org/k(a:"${'x'.repeat(n)}",b:"${'y'.repeat(n)}")`;
-  assert.equal(encCode(two(500)), 'OK');
+  assert.equal(encCode(two(499)), 'OK'); // 26 + 2n bytes: exactly 1024
+  assert.equal(encCode(two(500)), 'E_KEY_ENCODING'); // 1026
   assert.equal(encCode(two(507)), 'E_KEY_ENCODING'); // 1025+ bytes, each string far under the limit
   assert.ok(Buffer.byteLength(two(507)) > 1024);
   // nested encodings count in the whole

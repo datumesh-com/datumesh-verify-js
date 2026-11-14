@@ -5,9 +5,9 @@ specification side, in SPEC.md section 14.
 
 ## 0.5.0 — spec-0.5.0
 
-Conforms to the Datumesh specification revision `spec-0.5.0` (spec commit `7bed002`): all 778 of its
+Conforms to the Datumesh specification revision `spec-0.5.0` (spec commit `c8896ad`): all 818 of its
 vectors this library runs pass (the new kinds `class`, `normalisation`, `key`, `describe` and
-`define`, the envelope, mesh, function, licence and entitlement vectors included); the 648 vectors
+`define`, the envelope, mesh, function, licence and entitlement vectors included); the 656 vectors
 of the formula dialect, the `call`, `excel` and `decimal` kinds are skipped, as they belong to
 formula evaluators and the http crate. Verification of receipts is unchanged: no hash of an existing
 descriptor, receipt or cell changes.

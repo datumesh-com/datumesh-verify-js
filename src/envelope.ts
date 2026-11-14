@@ -147,10 +147,10 @@ const STATUS: Record<Outcome, (s: number) => boolean> = {
 };
 /** SPEC 5.5: the codes `parse` can raise (5.4), the only ones a bad_request carries. */
 const PARSE_CODES: readonly string[] = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
-/** Since spec-0.4.2 a bad_request also carries E_CANON_HEX (a pin) and E_SLICE_AT_CELL; E_JOB_UNKNOWN only at a job URL. Since spec-0.5.0, E_SHORT_ID_AMBIGUOUS (16.8). */
-const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN', 'E_SHORT_ID_AMBIGUOUS'];
-/** SPEC 5.5: an error envelope carries any 10.2 code but the client's, the request codes, the define and write codes, and (since spec-0.5.0) the class and describe codes and E_SHORT_ID_AMBIGUOUS. */
-const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE'];
+/** Since spec-0.4.2 a bad_request also carries E_CANON_HEX (a pin) and E_SLICE_AT_CELL; E_JOB_UNKNOWN only at a job URL. Since spec-0.5.0, E_SHORT_ID_AMBIGUOUS (16.8) and a call's E_KEY_NORMALISATION and E_KEY_ENCODING (5.5, 5.8). */
+const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING'];
+/** SPEC 5.5, 10.2 (since spec-0.5.0): the 18 codes no error envelope carries: the client's E_ENVELOPE and E_DESCRIBE, the request codes, the key codes, the define and write codes and the eight class codes. */
+const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_DESCRIBE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER'];
 /** SPEC 5.5 (since spec-0.5.0): the codes a not_covered envelope carries in `error`. */
 const NOT_COVERED_CODES: readonly string[] = ['E_NAME_UNBOUND', 'E_NAMESPACE_SUSPENDED'];
 /** SPEC 5.5 (since spec-0.5.0): the arguments of `resolved` resolutions. */
@@ -235,11 +235,11 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
       case 'error':
         if (outcome === 'bad_request') {
           // E_JOB_UNKNOWN only at a job URL: checked against the request in step 5.
-          if (typeof v !== 'string' || !BAD_REQUEST_CODES.includes(v)) bad('a bad_request carries a code that parsing a cell URI raises (SPEC 5.4), E_CANON_HEX, E_SLICE_AT_CELL, or E_JOB_UNKNOWN at a job URL', p);
+          if (typeof v !== 'string' || !BAD_REQUEST_CODES.includes(v)) bad('a bad_request carries a code that parsing a cell URI raises (SPEC 5.4), E_CANON_HEX, E_SLICE_AT_CELL, E_JOB_UNKNOWN at a job URL, or (since spec-0.5.0) E_SHORT_ID_AMBIGUOUS, E_KEY_NORMALISATION or E_KEY_ENCODING', p);
         } else if (outcome === 'not_covered') {
           if (typeof v !== 'string' || !NOT_COVERED_CODES.includes(v)) bad('not_covered carries only E_NAME_UNBOUND or E_NAMESPACE_SUSPENDED in error (since spec-0.5.0)', p);
         } else if (typeof v !== 'string' || NOT_ERROR_CODES.includes(v) || !(ERROR_CODES as readonly string[]).includes(v)) {
-          bad('error is a code from SPEC.md 10.2 other than E_ENVELOPE, E_JOB_UNKNOWN, E_SLICE_AT_CELL and E_NAME_UNBOUND', p);
+          bad('error is a code from SPEC.md 10.2 other than the codes of 5.5 that no error envelope carries', p);
         }
         break;
       case 'detail':

@@ -23,13 +23,14 @@ exists but its exact form had to be inferred).
 
 # spec-0.5.0
 
-`spec-0.5.0` (spec commit `7bed002`, 1426 vectors; 778 for a verifier library, 648 for formula
+`spec-0.5.0` (spec commit `c8896ad`, 1474 vectors; 818 for a verifier library, 656 for formula
 evaluators and the http crate) adds loopback URLs for unrooted hosts (9.6), `resolved` and `shadows`
 in envelopes (5.5), the classes of section 16 with key normalisation, object keys and describe
 answers, and the define-time check of 2.5. Worked from the diff of `SPEC.md`, `schemas/` and
-`vectors/` between `99123b2` and `7bed002`, the vectors, and the reference tool as a black box over
+`vectors/` between `99123b2` and `7bed002` (then `c8896ad`), the vectors, and the reference tool as a black box over
 838 probes (`tools/oracle-diff/probes_0_5_0.py`; verdicts in
-`test/fixtures/oracle-probes-0.5.0.jsonl.gz`, all matched by the library).
+`test/fixtures/oracle-probes-0.5.0.jsonl.gz`, re-run at `c8896ad`, where 24 verdicts changed;
+all matched by the library).
 
 | Change | Library change |
 |---|---|

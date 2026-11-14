@@ -11,12 +11,11 @@ import { DatumeshError, fail } from './errors.js';
 import { has, isObject, memberPath, newObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
 import { jcsBytes, jcsText } from './jcs.js';
 import { sha256Hex } from './hash.js';
-import { isKeyRule } from './normalisation.js';
+import { checkKeyNormalisation, isKeyRule } from './normalisation.js';
 import { LIMITS, URL_RE, checkArgName, checkDate, checkFunctionName, checkHex, checkInstant, checkName, checkNamespace, checkString, isDate, isInstant, isNumber, isTypeName, isHex, type TypeName } from './lexical.js';
 import { canonUnit, structUnit } from './units.js';
 import { validate } from './validate.js';
 import { isUnrooted } from './licence.js';
-import { utf8Length } from './utf8.js';
 
 export { KEY_NORMALISATIONS, checkKeyNormalisation, type KeyNormalisation } from './normalisation.js';
 
@@ -503,6 +502,14 @@ const quote = (s: string): string => `"${s.replace(/"/g, '""')}"`;
  */
 export function parseObjectKey(encoding: string): DecodedObject {
   if (typeof encoding !== 'string') throw new TypeError('parseObjectKey(encoding): encoding is a string');
+  // 16.5: an encoding is one string value by 3.5 as a whole (no control character, NFC, at most 1024
+  // bytes, which bounds every string inside it); each failure is E_KEY_ENCODING.
+  try {
+    checkString(encoding, '$');
+  } catch (e) {
+    if (e instanceof DatumeshError) encodingFailure(`the encoding is not one string value: ${e.detail}`);
+    throw e;
+  }
   const s = encoding;
   let i = 0;
   const peek = (): string => s.charAt(i);
@@ -648,7 +655,22 @@ function checkTyped(type: TypeName, value: JsonValue, path: string): void {
  * validator's; a class-typed key has no form in the object JSON, see DEFECTS.md).
  */
 export function objectJson(object: unknown): Uint8Array {
-  return jcsBytes(objectValue(object));
+  return jcsBytes(objectValue(withEncodedKeys(object)));
+}
+
+/**
+ * The object with each nested decoded object (a class-typed key, 16.5) replaced by its typed string
+ * scalar of its encoding: the object JSON holds typed scalars only.
+ */
+function withEncodedKeys(object: unknown): JsonValue {
+  const v = toJson(object as JsonValue);
+  if (!isObject(v) || !isObject(v.keys)) return v;
+  const keys: JsonObject = {};
+  for (const k of sortedKeys(v.keys)) {
+    const sc = (v.keys as JsonObject)[k];
+    keys[k] = isObject(sc) && has(sc, 'class') ? { type: 'string', value: formatObjectKey(sc as unknown as DecodedObject) } : sc;
+  }
+  return { ...v, keys } as JsonObject;
 }
 
 /** Object id (16.5): SHA-256 of the object's canonical bytes, lowercase hex. */
@@ -683,18 +705,26 @@ const hasExactly = (o: JsonObject, required: readonly string[], optional: readon
   }
 };
 
+/** A held class (16.8 step 4): the flattened descriptors the caller holds, found by their class hash. */
+function heldByHash(classes: { [name: string]: unknown }, hash: string): JsonObject | null {
+  return indexClasses(Object.values(classes)).get(hash) ?? null;
+}
+
 /**
- * Check a describe answer (16.8), JSON text, bytes or a parsed object, against what the caller
- * holds: `classes`, from class name to flattened class descriptor (an object; may be empty).
- * Throws DatumeshError E_DESCRIBE (or the parse codes for text that is not strict JSON).
+ * Check a describe answer (16.8), JSON text, bytes or a parsed object, in the six steps of the
+ * describe check. `classes` are the flattened class descriptors the caller holds, by any name (a held
+ * class is found by its class hash); `functions`, optional, the method function descriptors it holds
+ * (step 6). Throws DatumeshError: the parse codes for text that is not strict JSON (step 1), E_DESCRIBE
+ * for every other failure.
  */
-export function checkDescribe(answer: unknown, classes: { [name: string]: unknown }): DescribeResult {
-  if (!classes || typeof classes !== 'object') throw new TypeError('checkDescribe(answer, classes): classes is an object');
-  const a = toJson(answer as JsonValue);
-  if (!isObject(a)) fail('E_DESCRIBE', 'a describe answer is a JSON object', '$');
+export function checkDescribe(answer: unknown, classes: { [name: string]: unknown }, functions?: unknown[]): DescribeResult {
+  if (!classes || typeof classes !== 'object') throw new TypeError('checkDescribe(answer, classes, functions): classes is an object');
+  if (functions !== undefined && !Array.isArray(functions)) throw new TypeError('checkDescribe(answer, classes, functions): functions is an array');
+  const a = toJson(answer as JsonValue); // step 1: parse (6.1)
   try {
+    if (!isObject(a)) fail('E_DESCRIBE', 'a describe answer is a JSON object', '$');
     if (a.kind === 'class') {
-      checkClassAnswer(a);
+      checkClassAnswer(a, functions ?? []);
       return { kind: 'class' };
     }
     if (a.kind === 'object') {
@@ -708,67 +738,96 @@ export function checkDescribe(answer: unknown, classes: { [name: string]: unknow
   }
 }
 
-function checkClassAnswer(a: JsonObject): void {
+/** Step 2 for a description: a string of 1 to 1024 bytes valid by 3.5. */
+function checkDescription(d: unknown, path: string): void {
+  if (typeof d !== 'string' || d.length === 0) fail('E_DESCRIBE', 'description is a non-empty string', path);
+  checkString(d, path);
+}
+
+/** Step 6 for a method whose function descriptor the client holds: args and returns as the function's. */
+function checkMethodSignature(fn: JsonObject, desc: JsonObject, e: JsonObject, path: string): void {
+  const sig = fn.signature as JsonObject;
+  const args = sig.args as JsonObject;
+  const keys = desc.keys as JsonObject;
+  const own: JsonObject = {};
+  for (const n of sortedKeys(args)) if (!has(keys, n)) own[n] = args[n];
+  if (jcsOf(own) !== jcsOf(e.args as JsonObject)) fail('E_DESCRIBE', "args are the method function's arguments after the class keys", `${path}.args`);
+  if (jcsOf(sig.returns as JsonValue) !== jcsOf(e.returns as JsonValue)) fail('E_DESCRIBE', "returns is the method function's return", `${path}.returns`);
+}
+
+function checkClassAnswer(a: JsonObject, functions: unknown[]): void {
   hasExactly(a, ['kind', 'class', 'class_hash', 'descriptor', 'methods'], [], 'a class answer');
   if (typeof a.class !== 'string') fail('E_DESCRIBE', 'class is a name', '$.class');
   checkFunctionName(a.class, '$.class');
+  if (!isLowerHex64(a.class_hash)) fail('E_DESCRIBE', 'class_hash is 64 lowercase hex digits', '$.class_hash');
   if (!isObject(a.descriptor)) fail('E_DESCRIBE', 'descriptor is an object', '$.descriptor');
-  const desc = checkClassDescriptor(a.descriptor);
-  if (a.class_hash !== sha256(jcsBytes(desc))) fail('E_DESCRIBE', 'class_hash is the hash of the descriptor', '$.class_hash');
+  const desc = checkClassDescriptor(a.descriptor); // step 2: the structure of a class descriptor
   if (!isObject(a.methods)) fail('E_DESCRIBE', 'methods is an object', '$.methods');
+  // step 3: the hash and the method table follow from the descriptor
+  if (a.class_hash !== sha256(jcsBytes(desc))) fail('E_DESCRIBE', 'class_hash is the hash of the descriptor', '$.class_hash');
   const table = a.methods as JsonObject;
   const dm = desc.methods as JsonObject;
-  if (sortedKeys(table).join() !== sortedKeys(dm).join()) fail('E_DESCRIBE', 'the method table lists the descriptor\'s methods and no other', '$.methods');
+  if (sortedKeys(table).join() !== sortedKeys(dm).join()) fail('E_DESCRIBE', "the method table lists the descriptor's methods and no other", '$.methods');
+  const held = indexFunctions(functions); // step 6: only the functions the client holds
   for (const m of sortedKeys(table)) {
     const e = table[m];
-    if (!isObject(e)) fail('E_DESCRIBE', 'a method entry is an object', `$.methods.${m}`);
+    const path = `$.methods.${m}`;
+    if (!isObject(e)) fail('E_DESCRIBE', 'a method entry is an object', path);
     hasExactly(e, ['fn', 'fn_hash', 'args', 'returns'], ['description'], `method ${m}`);
-    if (e.fn !== `${a.class as string}/${m}`) fail('E_DESCRIBE', 'fn is the class name and the method name', `$.methods.${m}.fn`);
-    if (e.fn_hash !== dm[m]) fail('E_DESCRIBE', 'fn_hash is the descriptor\'s hash for the method', `$.methods.${m}.fn_hash`);
-    if (!isObject(e.args)) fail('E_DESCRIBE', 'args is an object', `$.methods.${m}.args`);
-    if (has(e, 'description')) {
-      if (typeof e.description !== 'string' || utf8Length(e.description) > 1024) fail('E_DESCRIBE', 'description is a string of at most 1024 bytes', `$.methods.${m}.description`);
-    }
+    if (e.fn !== `${a.class as string}/${m}`) fail('E_DESCRIBE', 'fn is the class name and the method name', `${path}.fn`);
+    if (e.fn_hash !== dm[m]) fail('E_DESCRIBE', "fn_hash is the descriptor's hash for the method", `${path}.fn_hash`);
+    if (!isObject(e.args)) fail('E_DESCRIBE', 'args is an object', `${path}.args`);
+    if (has(e, 'description')) checkDescription(e.description, `${path}.description`);
+    const fn = held.get(dm[m] as string);
+    if (fn) checkMethodSignature(fn, desc, e, path);
   }
 }
 
 function checkObjectAnswer(a: JsonObject, classes: { [name: string]: unknown }): void {
   hasExactly(a, ['kind', 'object', 'object_id', 'short_id', 'call', 'methods'], ['same_as'], 'an object answer');
-  const obj = objectValue(a.object);
-  const id = sha256(jcsBytes(obj));
-  if (a.object_id !== id) fail('E_DESCRIBE', 'object_id is the object\'s id', '$.object_id');
-  if (a.short_id !== id.slice(0, 12)) fail('E_DESCRIBE', 'short_id is the first 12 hex digits of object_id', '$.short_id');
-  if (a.call !== callForm(obj)) fail('E_DESCRIBE', 'call is the object\'s call form', '$.call');
+  const obj = objectValue(a.object); // step 2: the object's typed scalars
+  if (!isLowerHex64(a.object_id)) fail('E_DESCRIBE', 'object_id is 64 lowercase hex digits', '$.object_id');
+  if (typeof a.short_id !== 'string' || !isHex(a.short_id, 12)) fail('E_DESCRIBE', 'short_id is 12 lowercase hex digits', '$.short_id');
+  if (typeof a.call !== 'string') fail('E_DESCRIBE', 'call is a string', '$.call');
   if (!Array.isArray(a.methods) || a.methods.some((x) => typeof x !== 'string')) fail('E_DESCRIBE', 'methods is an array of names', '$.methods');
   const methods = a.methods as string[];
+  for (const m of methods) checkName(m, '$.methods');
   if (!methods.every((x, i) => i === 0 || methods[i - 1] < x)) fail('E_DESCRIBE', 'methods is ascending and unique', '$.methods');
   if (has(a, 'same_as')) {
     if (!Array.isArray(a.same_as) || a.same_as.length === 0) fail('E_DESCRIBE', 'same_as is a non-empty array', '$.same_as');
-    for (const k of a.same_as as JsonValue[]) {
+    const same = a.same_as as JsonValue[];
+    for (const k of same) {
       if (typeof k !== 'string') fail('E_DESCRIBE', 'same_as holds key encodings', '$.same_as');
       parseObjectKey(k);
     }
+    if (!same.every((x, i) => i === 0 || (same[i - 1] as string) < (x as string))) fail('E_DESCRIBE', 'same_as is ascending and unique', '$.same_as');
   }
-  // A held class (found by the object's class hash) gives its keys and methods.
-  for (const name of sortedKeys(classes as JsonObject)) {
-    let held: JsonObject;
-    try {
-      held = checkClassDescriptor(toJson(classes[name] as JsonValue));
-    } catch (e) {
-      if (e instanceof DatumeshError) continue;
-      throw e;
+  // step 3: what follows from the object alone
+  const id = sha256(jcsBytes(obj));
+  if (a.object_id !== id) fail('E_DESCRIBE', "object_id is the object's id", '$.object_id');
+  if (a.short_id !== id.slice(0, 12)) fail('E_DESCRIBE', 'short_id is the first 12 hex digits of object_id', '$.short_id');
+  if (a.call !== callForm(obj)) fail('E_DESCRIBE', "call is the object's call form", '$.call');
+  // step 4: the held class, by class hash; a client holding none stops here
+  const held = heldByHash(classes, obj.class_hash as string);
+  if (!held) return;
+  // step 5: against the held class
+  const hk = held.keys as JsonObject;
+  const ok = obj.keys as JsonObject;
+  if (sortedKeys(hk).join() !== sortedKeys(ok).join()) fail('E_DESCRIBE', "the object's keys are the class's", '$.object.keys');
+  for (const k of sortedKeys(hk)) {
+    const decl = hk[k] as JsonObject;
+    const sc = ok[k] as JsonObject;
+    const path = `$.object.keys.${k}`;
+    if (has(decl, 'class')) {
+      if (sc.type !== 'string') fail('E_DESCRIBE', `key ${k} is class-typed: a string`, path);
+      const decoded = parseObjectKey(sc.value as string);
+      if (decoded.class !== decl.class || formatObjectKey(decoded) !== sc.value) fail('E_DESCRIBE', `key ${k} is the encoding of an object of ${decl.class as string}`, path);
+    } else {
+      if (sc.type !== decl.type) fail('E_DESCRIBE', `key ${k} has the class's type`, path);
+      if (decl.type === 'string') checkKeyNormalisation((decl.key_normalisation as string | undefined) ?? 'none', sc.value as string);
     }
-    if (sha256(jcsBytes(held)) !== obj.class_hash) continue;
-    const hk = held.keys as JsonObject;
-    const ok = obj.keys as JsonObject;
-    if (sortedKeys(hk).join() !== sortedKeys(ok).join()) fail('E_DESCRIBE', 'the object\'s keys are the class\'s', '$.object.keys');
-    for (const k of sortedKeys(hk)) {
-      if ((hk[k] as JsonObject).type !== (ok[k] as JsonObject).type) fail('E_DESCRIBE', `key ${k} has the class's type`, '$.object.keys');
-    }
-    if (methods.join() !== sortedKeys(held.methods as JsonObject).join()) fail('E_DESCRIBE', 'the object\'s methods are the class\'s', '$.methods');
-    return;
   }
-  if (!Array.isArray(a.methods)) fail('E_DESCRIBE', 'methods is an array', '$.methods');
+  if (methods.join() !== sortedKeys(held.methods as JsonObject).join()) fail('E_DESCRIBE', "the object's methods are the class's", '$.methods');
 }
 
 // ---------------------------------------------------------------- 2.5 define
