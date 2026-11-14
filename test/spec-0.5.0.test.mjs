@@ -1009,7 +1009,7 @@ test('item 10: the runner runs the new kinds and skips the same five', async () 
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
   for (const k of ['class', 'normalisation', 'key', 'describe', 'define', 'envelope', 'mesh', 'function', 'licence', 'entitlement']) assert.equal(SKIPPED_KINDS.includes(k), false, k);
   assert.deepEqual(OUTPUTS.class, ['flattened', 'class_hash']);
-  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id']); // c8896ad: the last two for a vector given class_hash
+  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id', 'class_hash']); // c8896ad: the last three for a vector given class_hash (class_hash echoed, the reference's output form)
   assert.deepEqual(OUTPUTS.define, ['canonical', 'sha256']);
   assert.deepEqual([OUTPUTS.normalisation, OUTPUTS.describe], [[], []]);
   for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && x.valid)) {
@@ -1426,13 +1426,14 @@ function await_(ids) {
 test('re-pin 6: the key vectors given class_hash have object and object_id (key/nested-object), and the runner outputs them', async () => {
   const v = byId['key/nested-object'];
   assert.ok(v.class_hash && v.object && v.object_id);
-  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id']);
+  assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id', 'class_hash']);
   await conforms(['key/nested-object', 'key/at-limit']);
   // a key vector without class_hash has neither
   for (const x of all.filter((k) => k.kind === 'key' && k.valid && k.class_hash === undefined)) assert.equal(x.object === undefined && x.object_id === undefined, true, x.id);
   const got = await run(v);
   assert.deepEqual(got.object, v.object);
   assert.equal(got.object_id, v.object_id);
+  assert.equal(got.class_hash, v.class_hash); // echoed, as the reference's output form has it
 });
 
 test('re-pin 6: the object JSON holds a class-typed key as the typed string scalar of its encoding (16.5)', () => {
