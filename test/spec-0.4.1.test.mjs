@@ -19,7 +19,10 @@ const cjs = createRequire(import.meta.url)('../dist/cjs/index.js');
 const { checkEnvelope, resolveMesh, verify, keysFromResponse, ERROR_CODES } = lib;
 
 test('ERROR_CODES: E_JOB_UNKNOWN and E_MESH_DOC after E_ENVELOPE, last (SPEC 10.2)', () => {
-  assert.deepEqual(ERROR_CODES.slice(-6, -3), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_MESH_DOC']); // spec-0.4.2 appends two more, spec-0.4.3 one
+  // Located by position, not from the end: spec-0.4.2 and -0.4.3 and spec-0.5.0 append codes after these.
+  const i = ERROR_CODES.indexOf('E_ENVELOPE');
+  assert.deepEqual(ERROR_CODES.slice(i, i + 3), ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_MESH_DOC']);
+  assert.ok(ERROR_CODES.indexOf('E_FOREIGN_UNAVAILABLE') > i + 2);
 });
 
 test('the library agrees with the reference tool on every spec-0.4.1 probe', async () => {

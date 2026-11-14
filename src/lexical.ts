@@ -267,3 +267,21 @@ export function checkTypedValue(type: TypeName, value: unknown, path: string): v
   else if (type === 'blob') checkBlob(value, path);
   else checkString(value, path);
 }
+
+/**
+ * SPEC 9.6 (since spec-0.5.0): a loopback origin, `http://` on exactly 127.0.0.1, [::1] or
+ * localhost (lowercase), with an optional port of 1 to 65535 without leading zeros. Returns the
+ * origin (the text up to the path's `/`) or null. The path must follow, so `http://localhost`
+ * alone is not one.
+ */
+export function loopbackOrigin(url: string): string | null {
+  const m = /^http:\/\/(127\.0\.0\.1|\[::1\]|localhost)(?::([1-9][0-9]{0,4}))?(?=\/)/.exec(url);
+  if (!m) return null;
+  if (m[2] !== undefined && Number(m[2]) > 65535) return null;
+  return m[0];
+}
+
+/** The last label of a host is `invalid`: an unrooted host (2.5). Assumes a DNS name. */
+export function lastLabelIsInvalid(host: string): boolean {
+  return host.split('.').pop() === 'invalid';
+}

@@ -4,7 +4,7 @@
 import { DatumeshError } from './errors.js';
 import { isObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
 import { keysFromResponse, type KeyEntry } from './keys.js';
-import { LIMITS, URL_RE } from './lexical.js';
+import { LIMITS, URL_RE, lastLabelIsInvalid, loopbackOrigin } from './lexical.js';
 
 /** An HTTPS response for one document: the integer status (null: network failure) and the body. */
 export interface DocumentResponse {
@@ -35,6 +35,7 @@ export const MESH_ENDPOINTS: Readonly<Record<string, { placeholders: readonly st
   blob: { placeholders: ['sha256'], required: false },
   cell: { placeholders: ['cell'], required: true },
   cells: { placeholders: [], required: false },
+  describe: { placeholders: ['id'], required: false }, // since spec-0.5.0 (16.8)
   descriptor: { placeholders: ['hash'], required: true },
   explain: { placeholders: ['cell'], required: false },
   find: { placeholders: [], required: false },
@@ -70,11 +71,36 @@ function parse(body: string | Uint8Array): JsonValue | undefined {
   }
 }
 
-/** A URL by the licence URL rule, on this host: `https://<host>/...`, at most 512 characters. */
-function onHost(v: unknown, host: string, what: string, path: string): string {
-  if (typeof v !== 'string' || !URL_RE.test(v) || v.length > LIMITS.licence_url) no('E_MESH_DOC', `${what} is an https URL of at most 512 printable ASCII characters`, path);
-  if (!v.startsWith(`https://${host}/`)) no('E_MESH_DOC', `${what} is a URL on this host (${host}), followed by a path`, path);
-  return v;
+/**
+ * The URLs of one mesh document (9.6, since spec-0.5.0): each is `https://<host>/...` (by the
+ * licence URL rule, at most 512 characters), or, for an unrooted host only, `http://` on one
+ * loopback origin (127.0.0.1, [::1] or localhost, with an optional port), the same origin for
+ * every URL of the document, and no https URL alongside it.
+ */
+class DocumentUrls {
+  private origin: string | null = null;
+  private https = false;
+  constructor(private readonly host: string) {}
+
+  url(v: unknown, what: string, path: string): string {
+    if (typeof v !== 'string' || v.length > LIMITS.licence_url) no('E_MESH_DOC', `${what} is a URL of at most 512 printable ASCII characters`, path);
+    if (v.startsWith('http://')) {
+      const o = loopbackOrigin(v);
+      if (!lastLabelIsInvalid(this.host) || o === null || !/^http:\/\/[!-~]+$/.test(v)) no('E_MESH_DOC', `${what} is http:// on a loopback address, for an unrooted host only (9.6)`, path);
+      if (this.origin !== null && this.origin !== o) no('E_MESH_DOC', `${what} is on another origin than the document's (${this.origin})`, path);
+      this.origin = o;
+      return v;
+    }
+    if (!URL_RE.test(v)) no('E_MESH_DOC', `${what} is an https URL of at most 512 printable ASCII characters`, path);
+    if (!v.startsWith(`https://${this.host}/`)) no('E_MESH_DOC', `${what} is a URL on this host (${this.host}), followed by a path`, path);
+    this.https = true;
+    return v;
+  }
+
+  /** Called after the document's URLs: a loopback document has no https URL. */
+  done(path: string): void {
+    if (this.origin !== null && this.https) no('E_MESH_DOC', 'a loopback mesh document has no https URL (9.6)', path);
+  }
 }
 
 /**
@@ -117,7 +143,8 @@ export function resolveMesh(host: string, responses: { keys?: DocumentResponse; 
     if (!keys.ok || !keys.keys) no('E_KEY_DOC', keys.detail);
     // 6. The mesh document's members: bindings, endpoints (every required one), then each known
     // endpoint in ascending name order. Unknown members are ignored and dropped.
-    const bindings = onHost(md.bindings, host, 'bindings', '$.bindings');
+    const urls = new DocumentUrls(host);
+    const bindings = urls.url(md.bindings, 'bindings', '$.bindings');
     if (!isObject(md.endpoints)) no('E_MESH_DOC', 'endpoints is an object', '$.endpoints');
     const eps = md.endpoints as JsonObject;
     for (const name of Object.keys(MESH_ENDPOINTS).sort()) {
@@ -128,7 +155,7 @@ export function resolveMesh(host: string, responses: { keys?: DocumentResponse; 
       const spec = MESH_ENDPOINTS[name];
       if (!spec || !Object.prototype.hasOwnProperty.call(MESH_ENDPOINTS, name)) continue;
       const p = `$.endpoints.${name}`;
-      const url = onHost(eps[name], host, name, p);
+      const url = urls.url(eps[name], name, p);
       // Each listed placeholder exactly once, and every { and } belongs to one of them.
       let rest = url;
       const once = spec.placeholders.every((ph) => {
@@ -141,6 +168,7 @@ export function resolveMesh(host: string, responses: { keys?: DocumentResponse; 
       }
       endpoints[name] = url;
     }
+    urls.done('$.endpoints');
     return { ok: true, code: 'OK', host, detail: `${host}: key document and mesh document agree; ${Object.keys(endpoints).length} endpoints`, path: null, bindings, endpoints, keys: keys.keys };
   } catch (e) {
     if (e instanceof MeshFail) return { ok: false, code: e.code, host, detail: e.detail, path: e.path, bindings: null, endpoints: null, keys: null };

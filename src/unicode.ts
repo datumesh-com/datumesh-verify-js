@@ -174,3 +174,25 @@ export function hasLoneSurrogate(s: string): boolean {
   }
   return false;
 }
+
+/**
+ * The canonical decomposition of a code point sequence, every level of it (UAX #15 NFD; the
+ * canonical order is not needed for a presence check, so it is not applied). Used by the
+ * greek_unaccented rule (SPEC 16.4).
+ */
+export function decomposedCodePoints(cps: readonly number[]): number[] {
+  tables();
+  const out: number[] = [];
+  const full = (cp: number): void => {
+    const s = cp - SBASE;
+    if (s >= 0 && s < SCOUNT) {
+      decompose(cp, out);
+      return;
+    }
+    const d = decompMap!.get(cp);
+    if (d) for (const x of d) full(x);
+    else out.push(cp);
+  };
+  for (const cp of cps) full(cp);
+  return out;
+}

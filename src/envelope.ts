@@ -2,10 +2,11 @@
 // Synchronous, offline; the embedded receipt is verified through step 6 with the given keys.
 import { DatumeshError, ERROR_CODES, type ErrorCode } from './errors.js';
 import { has, isObject, memberPath, normalizeValue, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
-import { LIMITS, URL_RE, checkDnsName, checkNumber, checkString, compareValues, isHex, isInstant } from './lexical.js';
+import { LIMITS, URL_RE, checkDnsName, checkFunctionName, checkNumber, checkString, compareValues, isHex, isInstant, loopbackOrigin } from './lexical.js';
 import { sha256Hex } from './hash.js';
-import { jcsBytes } from './jcs.js';
+import { jcsBytes, jcsText } from './jcs.js';
 import { collectSources, type Sources } from './keys.js';
+import { isUnrooted } from './licence.js';
 import { isCurrency } from './units.js';
 import { Stop, memberOf, verifyEmbedded } from './verify.js';
 import { isVersionSlice, validate } from './validate.js';
@@ -46,8 +47,8 @@ export interface Pending {
 export type Trust = 'primary' | 'computed' | 'verified' | 'unverified';
 
 /** SPEC 5.5, 15.11 (since spec-0.4.0): the formula evaluation faults a `not_covered` envelope may carry. */
-export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE';
-export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE'];
+export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE' | 'E_FORMULA_KEY' | 'E_FORMULA_DISPATCH_KEY';
+export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_DISPATCH_KEY'];
 
 /**
  * Since spec-0.4.3: what failed in reaching a foreign mesh, the `detail` of an `error` envelope
@@ -86,17 +87,50 @@ export interface EnvelopeResult {
    * belongs to another mesh, which could not be reached; HTTP 502), its `detail`; else null.
    */
   foreignDetail: ForeignDetail | null;
+  /**
+   * Since spec-0.5.0: the `resolved` member when ok and present (5.5, 16.7): what a short call
+   * resolved, as the mesh says it; else null.
+   */
+  resolved: Resolved | null;
+  /** Since spec-0.5.0: the `shadows` member when ok and present (5.5, 16.9); else null. */
+  shadows: Shadows | null;
+  /**
+   * Since spec-0.5.0: the `error` member when ok and the outcome carries one (not_covered,
+   * bad_request, error); else null.
+   */
+  error: ErrorCode | null;
+}
+
+/** Since spec-0.5.0 (5.5): a resolution of a short call (16.7). `lookup` carries its `asof`. */
+export interface Resolution {
+  from: string;
+  kind: 'alias' | 'default' | 'method' | 'lookup';
+  to: string;
+  asof?: string;
+}
+
+/** Since spec-0.5.0 (5.5): `resolved`, the full canonical call and what it resolved, optionally the alias snapshot instant. */
+export interface Resolved {
+  call: string;
+  resolutions: Resolution[];
+  aliases_tx?: string;
+}
+
+/** Since spec-0.5.0 (5.5, 16.9): a class name that a mesh binds to another hash than its reference class. */
+export interface Shadows {
+  class: string;
+  reference: string;
 }
 
 /** SPEC 5.5: required and optional members per outcome (besides `outcome`). */
 const MEMBERS: Record<Outcome, { required: string[]; optional: string[] }> = {
-  ok: { required: ['receipt', 'trust'], optional: ['superseded_by', 'reason', 'fn_hash'] },
-  stale: { required: ['receipt', 'trust', 'age_seconds'], optional: ['superseded_by', 'reason', 'fn_hash'] },
-  not_covered: { required: [], optional: ['fault', 'error', 'fn_hash'] },
-  unlicensed: { required: [], optional: ['fn_hash'] },
-  payment_required: { required: ['quote'], optional: ['fn_hash'] },
+  ok: { required: ['receipt', 'trust'], optional: ['superseded_by', 'reason', 'fn_hash', 'resolved', 'shadows'] },
+  stale: { required: ['receipt', 'trust', 'age_seconds'], optional: ['superseded_by', 'reason', 'fn_hash', 'resolved', 'shadows'] },
+  not_covered: { required: [], optional: ['fault', 'error', 'fn_hash', 'resolved', 'shadows'] },
+  unlicensed: { required: [], optional: ['fn_hash', 'resolved', 'shadows'] },
+  payment_required: { required: ['quote'], optional: ['fn_hash', 'resolved', 'shadows'] },
   rate_limited: { required: ['retry_after_seconds'], optional: ['fn_hash'] },
-  error: { required: ['error'], optional: ['detail', 'fn_hash'] }, // detail since spec-0.4.3
+  error: { required: ['error'], optional: ['detail', 'fn_hash', 'resolved', 'shadows'] }, // detail since spec-0.4.3
   bad_request: { required: ['error'], optional: ['fn_hash'] },
   pending: { required: ['estimate_seconds', 'job', 'poll', 'request'], optional: [] },
 };
@@ -113,13 +147,18 @@ const STATUS: Record<Outcome, (s: number) => boolean> = {
 };
 /** SPEC 5.5: the codes `parse` can raise (5.4), the only ones a bad_request carries. */
 const PARSE_CODES: readonly string[] = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
-/** Since spec-0.4.2 a bad_request also carries E_CANON_HEX (a pin) and E_SLICE_AT_CELL; E_JOB_UNKNOWN only at a job URL. */
-const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN'];
-/** SPEC 5.5: an error envelope carries any 10.2 code but the client's and the three request codes. */
-const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND'];
+/** Since spec-0.4.2 a bad_request also carries E_CANON_HEX (a pin) and E_SLICE_AT_CELL; E_JOB_UNKNOWN only at a job URL. Since spec-0.5.0, E_SHORT_ID_AMBIGUOUS (16.8). */
+const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN', 'E_SHORT_ID_AMBIGUOUS'];
+/** SPEC 5.5: an error envelope carries any 10.2 code but the client's, the request codes, the define and write codes, and (since spec-0.5.0) the class and describe codes and E_SHORT_ID_AMBIGUOUS. */
+const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE'];
+/** SPEC 5.5 (since spec-0.5.0): the codes a not_covered envelope carries in `error`. */
+const NOT_COVERED_CODES: readonly string[] = ['E_NAME_UNBOUND', 'E_NAMESPACE_SUSPENDED'];
+/** SPEC 5.5 (since spec-0.5.0): the arguments of `resolved` resolutions. */
+const RESOLUTION_KINDS: readonly string[] = ['alias', 'default', 'method', 'lookup'];
 const TRUST: readonly string[] = ['primary', 'computed', 'verified', 'unverified'];
 const HEX64 = /^[0-9a-f]{64}$/;
 const JOB_RE = /^[0-9a-f]{32,64}$/;
+const HTTP_URL_RE = /^http:\/\/[!-~]+$/;
 const MAX_SECONDS = 9007199254740991;
 
 class Bad extends Error {
@@ -198,7 +237,7 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
           // E_JOB_UNKNOWN only at a job URL: checked against the request in step 5.
           if (typeof v !== 'string' || !BAD_REQUEST_CODES.includes(v)) bad('a bad_request carries a code that parsing a cell URI raises (SPEC 5.4), E_CANON_HEX, E_SLICE_AT_CELL, or E_JOB_UNKNOWN at a job URL', p);
         } else if (outcome === 'not_covered') {
-          if (v !== 'E_NAME_UNBOUND') bad('not_covered carries only E_NAME_UNBOUND in error', p);
+          if (typeof v !== 'string' || !NOT_COVERED_CODES.includes(v)) bad('not_covered carries only E_NAME_UNBOUND or E_NAMESPACE_SUSPENDED in error (since spec-0.5.0)', p);
         } else if (typeof v !== 'string' || NOT_ERROR_CODES.includes(v) || !(ERROR_CODES as readonly string[]).includes(v)) {
           bad('error is a code from SPEC.md 10.2 other than E_ENVELOPE, E_JOB_UNKNOWN, E_SLICE_AT_CELL and E_NAME_UNBOUND', p);
         }
@@ -214,10 +253,16 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
         break;
       case 'poll':
         // SPEC 5.5: https:// and printable ASCII, at most 512 characters, ending /jobs/<job>; the text
-        // between https:// and the next / is a DNS name (2.1). That it is the host asked is the
-        // client's HTTP layer's check (MUST), which an envelope cannot make.
-        if (typeof v !== 'string' || !URL_RE.test(v) || v.length > LIMITS.licence_url || !v.endsWith(`/jobs/${String(o.job)}`)) bad("poll is the job's https URL, at most 512 characters, ending /jobs/<job>", p);
-        if (!isDnsName(v.slice('https://'.length).split('/')[0])) bad("poll's host (between https:// and the next /) is a DNS name: no port, userinfo, IP address, uppercase or query", p);
+        // between https:// and the next / is a DNS name (2.1). Since spec-0.5.0 an http:// loopback
+        // URL (9.6), which step 3a allows only for the unrooted mesh asked. That it is the host
+        // asked is the client's HTTP layer's check (MUST), which an envelope cannot make.
+        if (typeof v !== 'string' || v.length > LIMITS.licence_url || !v.endsWith(`/jobs/${String(o.job)}`)) bad("poll is the job's URL, at most 512 characters, ending /jobs/<job>", p);
+        if (v.startsWith('http://')) {
+          if (!HTTP_URL_RE.test(v) || loopbackOrigin(v) === null) bad('poll is https://, or http:// on a loopback address (9.6)', p);
+        } else {
+          if (!URL_RE.test(v)) bad("poll is the job's https URL, printable ASCII", p);
+          if (!isDnsName(v.slice('https://'.length).split('/')[0])) bad("poll's host (between https:// and the next /) is a DNS name: no port, userinfo, IP address, uppercase or query", p);
+        }
         break;
       case 'request': {
         const ok =
@@ -231,6 +276,12 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
         if (!ok) bad('request is the original request echoed: {cell_id: <64 lowercase hex>, asof?: <instant>, fn_hash?: <64 lowercase hex>}', p);
         break;
       }
+      case 'resolved':
+        resolvedMember(v, p);
+        break;
+      case 'shadows':
+        shadowsMember(v, p);
+        break;
       case 'fault':
         if (typeof v !== 'string' || !(FAULTS as readonly string[]).includes(v)) bad(`fault is one of the formula evaluation faults ${FAULTS.join(', ')} (SPEC 5.5)`, p);
         break;
@@ -265,6 +316,48 @@ const isDnsName = (s: string): boolean => {
     throw e;
   }
 };
+
+/** Since spec-0.5.0 (5.5): `resolved`, exactly call, resolutions and optionally aliases_tx (an instant). */
+function resolvedMember(v: JsonValue, path: string): void {
+  if (!isObject(v)) bad('resolved is an object', path);
+  for (const k of ['call', 'resolutions']) if (!has(v, k)) bad(`resolved has no ${k}`, path);
+  for (const k of sortedKeys(v)) if (!['call', 'resolutions', 'aliases_tx'].includes(k)) bad(`resolved has an unexpected member ${JSON.stringify(k)}`, memberPath(path, k));
+  if (typeof v.call !== 'string' || v.call === '') bad('resolved.call is a non-empty string', memberPath(path, 'call'));
+  if (!Array.isArray(v.resolutions)) bad('resolved.resolutions is an array', memberPath(path, 'resolutions'));
+  (v.resolutions as JsonValue[]).forEach((r, i) => {
+    const rp = memberPath(memberPath(path, 'resolutions'), `[${i}]`);
+    if (!isObject(r)) bad('a resolution is an object', rp);
+    const lookup = (r as JsonObject).kind === 'lookup';
+    const want = lookup ? ['asof', 'from', 'kind', 'to'] : ['from', 'kind', 'to'];
+    if (sortedKeys(r as JsonObject).join() !== want.join()) bad(lookup ? 'a lookup resolution is {from, kind, to, asof}' : 'a resolution is {from, kind, to}', rp);
+    const ro = r as JsonObject;
+    if (typeof ro.from !== 'string' || typeof ro.to !== 'string') bad('a resolution has string from and to', rp);
+    if (typeof ro.kind !== 'string' || !RESOLUTION_KINDS.includes(ro.kind)) bad(`a resolution kind is one of ${RESOLUTION_KINDS.join(', ')}`, memberPath(rp, 'kind'));
+    if (lookup && (typeof ro.asof !== 'string' || !isInstant(ro.asof))) bad('a lookup resolution has its asof, an instant', memberPath(rp, 'asof'));
+  });
+  if (has(v, 'aliases_tx') && (typeof v.aliases_tx !== 'string' || !isInstant(v.aliases_tx))) bad('aliases_tx is an instant', memberPath(path, 'aliases_tx'));
+}
+
+/** Since spec-0.5.0 (5.5, 16.9): `shadows`, exactly class (a class name) and reference (a class hash). */
+function shadowsMember(v: JsonValue, path: string): void {
+  if (!isObject(v)) bad('shadows is an object', path);
+  if (sortedKeys(v).join() !== 'class,reference') bad('shadows is {class, reference}', path);
+  if (typeof v.class !== 'string') bad('shadows.class is a class name', memberPath(path, 'class'));
+  inner(() => checkFunctionName(v.class as string, memberPath(path, 'class')), memberPath(path, 'class'));
+  if (typeof v.reference !== 'string' || !HEX64.test(v.reference)) bad('shadows.reference is a class hash: 64 lowercase hex digits', memberPath(path, 'reference'));
+}
+
+/** A plain copy of a parsed value (for the result: plain objects, as the input was). */
+const plain = <T>(v: JsonValue): T => JSON.parse(jcsText(v)) as T;
+
+/** The members the result exposes (5.5, since spec-0.5.0): resolved, shadows and the error of the outcome. */
+function exposed(env: JsonObject, outcome: Outcome): Pick<EnvelopeResult, 'resolved' | 'shadows' | 'error'> {
+  return {
+    resolved: has(env, 'resolved') ? plain<Resolved>(env.resolved as JsonValue) : null,
+    shadows: has(env, 'shadows') ? plain<Shadows>(env.shadows as JsonValue) : null,
+    error: (outcome === 'not_covered' || outcome === 'bad_request' || outcome === 'error') && has(env, 'error') ? (env.error as ErrorCode) : null,
+  };
+}
 
 /** A typed scalar by 4.1 and section 3 (its type known, its value in that type's lexical form). */
 const isTypedScalar = (v: unknown): boolean => {
@@ -335,7 +428,7 @@ function subNumbers(numbers: Map<string, string>, prefix: string): Map<string, s
 const atPath = (prefix: string, p: string | null) => (p === null ? prefix : p.replace(/^\$/, prefix));
 
 type Req = { cell_id?: string; asof?: string; job?: string; fn_hash?: string; mesh?: string };
-const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null, pending: null, fnHash: null, foreignDetail: null });
+const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null, pending: null, fnHash: null, foreignDetail: null, resolved: null, shadows: null, error: null });
 
 /**
  * SPEC 5.5 step 6 for a verified receipt: `primary` exactly when its condition holds; with the
@@ -396,13 +489,17 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
         (request.fn_hash === undefined || echoed.fn_hash === request.fn_hash);
       if (!same) return failed('E_ENVELOPE', 'the pending envelope echoes another request than the one made', '$.request');
       if (request.job !== undefined && env.job !== request.job) return failed('E_ENVELOPE', `the pending envelope is for job ${String(env.job)}, not the job polled`, '$.job');
-      if (request.mesh !== undefined && urlHost(env.poll as string) !== request.mesh) return failed('E_ENVELOPE', `poll names another host than the mesh asked (${request.mesh})`, '$.poll');
+      // Since spec-0.5.0 (5.5, 9.6): a loopback poll passes only for the unrooted mesh asked; any other
+      // poll is on the host asked.
+      if (isHttpUrl(env.poll as string)) {
+        if (!(request.mesh !== undefined && isUnrooted(request.mesh))) return failed('E_ENVELOPE', 'a loopback poll is answered to the unrooted mesh asked only', '$.poll');
+      } else if (request.mesh !== undefined && urlHost(env.poll as string) !== request.mesh) return failed('E_ENVELOPE', `poll names another host than the mesh asked (${request.mesh})`, '$.poll');
       pending = { job: env.job as string, poll: env.poll as string, estimateSeconds: env.estimate_seconds as number };
     }
     const fault = has(env, 'fault') ? (env.fault as Fault) : null;
     const detail = fault ? `outcome ${outcome}, fault ${fault}` : pending ? `outcome pending, job ${pending.job}, estimate ${pending.estimateSeconds} s` : has(env, 'error') ? `outcome ${outcome}, ${String(env.error)}` : `outcome ${outcome}`;
     const foreignDetail = has(env, 'detail') ? (env.detail as ForeignDetail) : null;
-    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: foreignDetail ? `${detail} (${foreignDetail})` : detail, path: null, fault, pending, fnHash: echo, foreignDetail };
+    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: foreignDetail ? `${detail} (${foreignDetail})` : detail, path: null, fault, pending, fnHash: echo, foreignDetail, ...exposed(env, outcome) };
   }
   // Step 4.
   let r: { receipt: JsonObject; hash: string };
@@ -430,7 +527,7 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   if (problem !== null) return failed('E_ENVELOPE', problem, '$.trust', r.hash);
   if (echo !== null && echo !== cell.fn_hash) return failed('E_ENVELOPE', "fn_hash echoes another function than the receipt's", '$.fn_hash', r.hash);
   if (env.superseded_by === r.hash) return failed('E_ENVELOPE', 'superseded_by is the receipt itself', '$.superseded_by', r.hash);
-  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null };
+  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, ...exposed(env, outcome) };
 }
 
 function checkStatus(status: unknown): asserts status is number {
@@ -527,6 +624,22 @@ function compareKeys(names: string[], a: JsonObject, b: JsonObject): number | nu
 }
 
 const NEXT_RE = /^https:\/\/[^/]+\/[!-~]*$/;
+const HTTP_NEXT_RE = /^http:\/\/[^/]+\/[!-~]*$/;
+
+/** Since spec-0.5.0: an http:// URL (a loopback one, 9.6). */
+const isHttpUrl = (u: string): boolean => u.startsWith('http://');
+
+/**
+ * Since spec-0.5.0 (5.5, 5.6, 9.6): the problem with a URL the mesh gave (`poll` or `next`) for the
+ * request's mesh, or null. A loopback URL is for the unrooted mesh asked; any other is on the host
+ * asked when one is named.
+ */
+function urlProblem(u: string, mesh: string | undefined): string | null {
+  if (isHttpUrl(u)) {
+    return mesh !== undefined && isUnrooted(mesh) ? null : 'a loopback URL is for the unrooted mesh asked only';
+  }
+  return mesh !== undefined && urlHost(u) !== mesh ? `names another host than the mesh asked (${mesh})` : null;
+}
 
 function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, sources: Sources, request: SliceRequest): SlicePageResult {
   const fail = (detail: string, path: string) => asPage(failed('E_ENVELOPE', detail, path));
@@ -537,8 +650,14 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
   if (!Array.isArray(o.members)) return fail('members is an array of envelopes', '$.members');
   if (has(o, 'next')) {
     const n = o.next;
-    if (typeof n !== 'string' || !URL_RE.test(n) || n.length > LIMITS.licence_url) return fail('next is an https URL of at most 512 printable ASCII characters', '$.next');
-    if (!isDnsName(urlHost(n)) || !NEXT_RE.test(n)) return fail("next names a DNS name as its host, then a path", '$.next');
+    if (typeof n !== 'string' || n.length > LIMITS.licence_url) return fail('next is an https URL of at most 512 printable ASCII characters', '$.next');
+    if (isHttpUrl(n)) {
+      // Since spec-0.5.0 (9.6): http:// only on a loopback address.
+      if (!HTTP_NEXT_RE.test(n) || loopbackOrigin(n) === null) return fail('next is https://, or http:// on a loopback address (9.6)', '$.next');
+    } else {
+      if (!URL_RE.test(n)) return fail('next is an https URL of at most 512 printable ASCII characters', '$.next');
+      if (!isDnsName(urlHost(n)) || !NEXT_RE.test(n)) return fail("next names a DNS name as its host, then a path", '$.next');
+    }
   }
   if (has(o, 'fn_hash') && (typeof o.fn_hash !== 'string' || !HEX64.test(o.fn_hash))) return fail('fn_hash is a function hash: 64 lowercase hex digits', '$.fn_hash');
   if (!isObject(o.slice)) return fail('slice is a slice object', '$.slice');
@@ -557,7 +676,10 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
     throw e;
   }
   if (isVersionSlice(slice)) return fail('the slice endpoint serves membership slices', '$.slice');
-  if (request.mesh !== undefined && has(o, 'next') && urlHost(o.next as string) !== request.mesh) return fail(`next names another host than the mesh asked (${request.mesh})`, '$.next');
+  if (has(o, 'next')) {
+    const problem = urlProblem(o.next as string, request.mesh);
+    if (problem !== null) return fail(`next ${problem}`, '$.next');
+  }
   const sargs = slice.args as JsonObject;
   const open = sortedKeys(sargs).filter((k) => sargs[k] === '*' || (isObject(sargs[k]) && !has(sargs[k] as JsonObject, 'value')));
   // The cursor is compared on the open arguments only; its other names are ignored (a468606).
@@ -602,7 +724,7 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
     out.push({ outcome: m.outcome as 'ok' | 'stale', trust: m.trust as Trust, receiptHash: r.hash, fnHash: mecho, cell });
   }
   const page: SlicePage = { slice, members: out, next: has(o, 'next') ? (o.next as string) : null };
-  return { ok: true, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, page };
+  return { ok: true, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, resolved: null, shadows: null, error: null, page };
 }
 
 function slicePage(status: number, o: JsonValue, numbers: Map<string, string>, sources: Sources, request: SliceRequest): SlicePageResult {

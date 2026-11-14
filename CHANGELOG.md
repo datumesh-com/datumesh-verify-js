@@ -3,6 +3,51 @@
 Releases of `@datumesh/verify`. Earlier releases are described in the commit log and, for the
 specification side, in SPEC.md section 14.
 
+## 0.5.0 — spec-0.5.0
+
+Conforms to the Datumesh specification revision `spec-0.5.0` (spec commit `7bed002`): all 778 of its
+vectors this library runs pass (the new kinds `class`, `normalisation`, `key`, `describe` and
+`define`, the envelope, mesh, function, licence and entitlement vectors included); the 648 vectors
+of the formula dialect, the `call`, `excel` and `decimal` kinds are skipped, as they belong to
+formula evaluators and the http crate. Verification of receipts is unchanged: no hash of an existing
+descriptor, receipt or cell changes.
+
+**Compatibility.** A client on a library before its spec-0.5.0 release rejects a loopback mesh
+document of an unrooted host (`E_MESH_DOC`), a loopback `poll` or `next` (`E_ENVELOPE`), a descriptor
+with `classes`, `default` or `key_normalisation` (`E_SCHEMA`), an envelope with `resolved` or
+`shadows`, with `E_SHORT_ID_AMBIGUOUS`, or with the faults `E_FORMULA_KEY` and
+`E_FORMULA_DISPATCH_KEY` (`E_ENVELOPE`), and it does not know the codes `E_UNROOTED_INPUT` and
+`E_NAMESPACE_SUSPENDED`, nor the class vector kinds. Publishers should wait for their consumers to
+upgrade before serving a loopback mesh document or a function descriptor with the new members.
+
+- **Loopback URLs for unrooted hosts** (SPEC 9.6, 5.5, 5.6, 2.5). An unrooted host's mesh document
+  may use `http://` on exactly `127.0.0.1`, `[::1]` or `localhost`, with an optional port, all its
+  URLs on one origin and no https URL beside them; a loopback `poll` or `next` passes only when the
+  request names the unrooted mesh asked (`mesh`). Rooted hosts stay https-only. The key document of an
+  unrooted host is still supplied out of band.
+- **Envelopes** (SPEC 5.5). `EnvelopeResult` gains `resolved` (what a short call resolved: `call`,
+  `resolutions` with kinds `alias`, `default`, `method` and `lookup`, `aliases_tx`), `shadows` (a
+  class name and its reference class hash) and `error` (the `error` member of `not_covered`,
+  `bad_request` and `error` answers). `not_covered` may carry `E_NAMESPACE_SUSPENDED` in `error`.
+  `bad_request` may carry `E_SHORT_ID_AMBIGUOUS`. The faults `E_FORMULA_KEY` and
+  `E_FORMULA_DISPATCH_KEY` are in `FAULTS`.
+- **Codes** (SPEC 10.2). `ERROR_CODES` has 63 entries: `E_UNROOTED_INPUT`, `E_NAMESPACE_SUSPENDED`,
+  the eight `E_CLASS_*` codes, `E_KEY_NORMALISATION`, `E_KEY_ENCODING`, `E_SHORT_ID_AMBIGUOUS` and
+  `E_DESCRIBE`, in the order of 10.2. None of them is a verification result.
+- **Function descriptors** (SPEC 7). A `string` argument may declare `classes` (object keys of those
+  classes) and `key_normalisation` (one rule of 16.4; absent means `none`); a valid-time `date` or
+  `instant` argument may declare `default: "asof"`; `returns` may be `{"type": "string", "classes": [...]}`.
+  Checked in the order 7 gives; no existing function hash changes.
+- **Classes** (SPEC 16). `defineClass(descriptor, name, { definer, functions, classes })` checks a class
+  descriptor, flattens it onto its parent, checks its methods and interfaces, and returns
+  `{ flattened, classHash }`; `classHash(flattened)`; `checkKeyNormalisation(rule, text)` with the
+  closed list `KEY_NORMALISATIONS`; `parseObjectKey(encoding)` and `formatObjectKey(object)` (the one
+  canonical key encoding); `objectJson(object)`, `objectId(object)` and `shortId(id)`;
+  `checkDescribe(answer, classes)` for class and object answers (`E_DESCRIBE`); and
+  `checkDefine(descriptor, name)`, the define-time check of a function, with `E_UNROOTED_INPUT` for
+  a rooted function that reads an unrooted one (SPEC 2.5). Caller misuse throws `TypeError`.
+- Conformance runner: the kinds `class`, `normalisation`, `key`, `describe` and `define`.
+
 ## 0.4.3 — spec-0.4.3
 
 Conforms to the Datumesh specification revision `spec-0.4.3` (spec commit `99123b2`): every one of

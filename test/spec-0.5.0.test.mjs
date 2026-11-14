@@ -223,7 +223,7 @@ test('item 2: none of the new codes is a verification result (10.2)', async () =
 });
 
 test('item 2: the faults E_FORMULA_KEY and E_FORMULA_DISPATCH_KEY are exported with the other faults (5.5, 15.11)', () => {
-  assert.deepEqual([...lib.FAULTS].sort(), ['E_FORMULA_ABSENT', 'E_FORMULA_DIV_ZERO', 'E_FORMULA_DISPATCH_KEY', 'E_FORMULA_DOMAIN', 'E_FORMULA_EMPTY', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_RANGE']);
+  assert.deepEqual([...lib.FAULTS].sort(), ['E_FORMULA_ABSENT', 'E_FORMULA_DISPATCH_KEY', 'E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_EMPTY', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_RANGE']);
 });
 
 // ------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # Places where SPEC.md was insufficient
 
-Sections: `spec-0.4.3` (entries 56-59, open), `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 at `fc870ab`), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
+Sections: `spec-0.5.0` (entries 60-67, open), `spec-0.4.3` (entries 56-59, open), `spec-0.4.2` (entries 51-55; 51, 53 and 55 resolved at `a468606`, 52 and 54 at `fc870ab`), `spec-0.4.1` (entries 46-50, all resolved at `3f79313`), `spec-0.4.0` (status, entries 38-45, all resolved at `18be70f`), `spec-0.3.0` (status, entries 36-37), `spec-0.2.1` (status of every entry, and entry 35), `spec-0.2.0` (entries 19-34) and
 `spec-0.1.1` (entries 1-18). Entries
 that a later spec commit resolved say so in their heading; their text is kept as written.
 
@@ -18,6 +18,108 @@ Where SPEC.md is silent or ambiguous, I follow the reference tool. Every vector 
 Each entry is marked as a **conflict** (prose and reference tool disagree, or prose and a vector
 disagree), a **gap** (the prose does not decide the question), or **underspecified** (the rule
 exists but its exact form had to be inferred).
+
+---
+
+# spec-0.5.0
+
+`spec-0.5.0` (spec commit `7bed002`, 1426 vectors; 778 for a verifier library, 648 for formula
+evaluators and the http crate) adds loopback URLs for unrooted hosts (9.6), `resolved` and `shadows`
+in envelopes (5.5), the classes of section 16 with key normalisation, object keys and describe
+answers, and the define-time check of 2.5. Worked from the diff of `SPEC.md`, `schemas/` and
+`vectors/` between `99123b2` and `7bed002`, the vectors, and the reference tool as a black box over
+838 probes (`tools/oracle-diff/probes_0_5_0.py`; verdicts in
+`test/fixtures/oracle-probes-0.5.0.jsonl.gz`, all matched by the library).
+
+| Change | Library change |
+|---|---|
+| Loopback URLs (9.6, 5.5, 5.6) | `loopbackOrigin` (`lexical.ts`); `resolveMesh` one origin per document, none beside an https URL; `checkEnvelope` and `checkSlicePage` accept a loopback `poll` or `next` only for the unrooted `mesh` asked |
+| Envelope members (5.5) | `resolved`, `shadows`, `error` on `EnvelopeResult`; `FAULTS` with `E_FORMULA_KEY` and `E_FORMULA_DISPATCH_KEY`; `E_NAMESPACE_SUSPENDED` in `not_covered`; `E_SHORT_ID_AMBIGUOUS` in `bad_request` |
+| Function descriptors (7) | `classes`, `default`, `key_normalisation` checked in the order 7 gives (`validate.ts`) |
+| Classes (16.1-16.2) | `defineClass`, `classHash` (`classes.ts`) |
+| Key normalisation (16.4) | `checkKeyNormalisation`, `KEY_NORMALISATIONS` (`normalisation.ts`) |
+| Object keys (16.5) | `parseObjectKey`, `formatObjectKey`, `objectJson`, `objectId`, `shortId` |
+| Describe (16.8) | `checkDescribe` |
+| Define (2.5) | `checkDefine`, `E_UNROOTED_INPUT` |
+| Codes (10.2) | 14 appended to `ERROR_CODES` (63 in all) |
+
+## 60. Gap: the codes an `error` envelope may carry (5.5, 10.2)
+
+- **Text.** 5.5 excludes from `error` only `E_ENVELOPE`, the three request codes and the define and
+  write codes `E_UNROOTED_INPUT` and `E_NAMESPACE_SUSPENDED`.
+- **Reference tool (black box) and vectors.** Also refuse `E_SHORT_ID_AMBIGUOUS`, `E_DESCRIBE` and
+  the eight `E_CLASS_*` codes in an `error` envelope (`invalid/envelope-short-id-in-error`).
+- **Choice.** The library follows the tool: those codes are `E_ENVELOPE` in `error`, while
+  `E_KEY_NORMALISATION` and `E_KEY_ENCODING` are accepted (they are read-time codes of a mesh).
+- **Proposed wording (5.5).** List the excluded codes: every code of 10.2 raised by define, write,
+  class or describe, and `E_SHORT_ID_AMBIGUOUS`.
+
+## 61. Gap: `nfc_strict` and white space (16.4)
+
+- **Text.** "no space other than U+0020" for `nfc_strict`.
+- **Reference tool.** A space is any Unicode White_Space character: tab, line feed and the other
+  White_Space controls are refused, as well as U+0020 used twice, at the ends or repeated. NUL (Cc,
+  not Cf, not a space) is accepted.
+- **Choice.** The reference's reading. Format characters (Cf) are refused.
+- **Proposed wording (16.4).** "no White_Space character other than U+0020, no format character (Cf),
+  no line or paragraph separator, and no leading, trailing or repeated U+0020".
+
+## 62. Gap: a rule outside the closed list given to the pure check (16.4)
+
+- **Text.** Not said. The rule is a value supplied by the caller.
+- **Reference tool.** `E_CLASS_MEMBER`.
+- **Choice.** `checkKeyNormalisation` throws `E_SCHEMA`, as a function descriptor's unknown rule is
+  (7). A caller's non-string rule or text is a `TypeError`.
+
+## 63. Gap: which class a describe answer's object is checked against (16.8)
+
+- **Text.** "with the class descriptor at hand, the keys and methods are the class's."
+- **Reference tool.** Finds the held class by the object's `class_hash`, not by name, and checks an
+  object answer's `call` even when the class is not held.
+- **Choice.** The same: a held class is the one whose flattened descriptor hashes to the object's
+  `class_hash`; `call` and the ids are checked on their own.
+- **Proposed wording (16.8).** Say so.
+
+## 64. Gap: class-typed keys in the object JSON, and the id of a nested object (16.5)
+
+- **Text.** The object JSON has "each key a typed scalar"; a class-typed key is a nested object in
+  the `key` vectors' `decoded` and a string (its encoding) as a cell argument.
+- **Choice.** The object JSON form of a class-typed key is not defined: `objectJson` refuses it
+  (`E_SCHEMA`), so the object id of a nested object is not computed. The tests cover scalar keys.
+- **Proposed wording (16.5).** Give the form (for instance the key encoding as a string), and so the
+  object id of a nested object.
+
+## 65. Gap: the lookup method and the method check order (16.1, 16.2 step 6)
+
+- **Text.** 16.2 step 6 checks each method's keys, and says the `lookup` method "takes instead" one
+  `label`; 16.1 says `E_CLASS_MEMBER` for a lookup of the wrong signature.
+- **Vectors and reference tool.** `class/lookup` with `lookup` set to `rate` gives `E_CLASS_METHOD`
+  (the other method, `named`, no longer takes the lookup's exemption and fails the keys-first check,
+  which comes first in JCS order), while `fx_pair` with `lookup` naming its only method, which takes
+  the keys, gives `E_CLASS_MEMBER`.
+- **Choice.** The library checks the methods in JCS order, each as the lookup method (its own
+  signature, `E_CLASS_MEMBER`) or as a keyed method (`E_CLASS_METHOD`).
+- **Proposed wording (16.2 step 6).** "In JCS order of names, each method is checked: the one named
+  by `lookup` by its own signature, the others by their keys."
+
+## 66. Gap: the owner of a class under a namespace with a path (16.2 step 1, 2.3)
+
+- **Text.** "It is under the namespace of the definer: a namespace defines classes under itself
+  only."
+- **Vectors and reference tool.** A class `rates.example.org/fx_pair/other` defined by the definer
+  `rates.example.org` is accepted (its namespace is `rates.example.org/fx_pair`, under the definer).
+- **Choice.** The class name must start with the definer's name and `/`.
+- **Proposed wording (16.2 step 1).** "The class name is the definer's namespace followed by `/` and
+  a name, or a path below it."
+
+## 67. Gap: the rules of an extent function (16.1)
+
+- **Text.** An `extent` function takes exactly the class keys, in class order, and returns a boolean.
+  Nothing says whether its key arguments carry the class's `key_normalisation`.
+- **Vectors and reference tool.** They do not (the `exists` function of `same-as-and-inverse` has
+  none); the library does not require them.
+- **Proposed wording (16.1).** Say that extent functions are read as ordinary functions of the keys,
+  not as methods (16.2 step 6), so they do not carry the rules.
 
 ---
 

@@ -13,7 +13,7 @@ import { KINDS, cellUnit, inferKind, validate, validateMembers, type Kind } from
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
 export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { checkEnvelope, checkSlicePage, checkBatch, type EnvelopeResult, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult, type ForeignDetail, FOREIGN_DETAILS } from './envelope.js';
+export { checkEnvelope, checkSlicePage, checkBatch, FAULTS, type EnvelopeResult, type Resolved, type Resolution, type Shadows, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult, type ForeignDetail, FOREIGN_DETAILS } from './envelope.js';
 export { resolveMesh, MESH_ENDPOINTS, type MeshResult, type DocumentResponse } from './mesh.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
 export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource, type Declarations, type DeclarationEntry } from './keys.js';

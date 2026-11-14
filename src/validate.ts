@@ -22,6 +22,7 @@ import {
   isTypeName,
 } from './lexical.js';
 import { canonUnit, resolveUnit, structUnit } from './units.js';
+import { isKeyRule } from './normalisation.js';
 import type { TypeName } from './lexical.js';
 
 export type Kind = 'scalar' | 'cell' | 'ref' | 'function' | 'receipt' | 'slice' | 'manifest' | 'jcs';
@@ -98,8 +99,15 @@ export function structSignature(v: JsonValue, path: string): void {
   for (const k of sortedKeys(args)) {
     const p = memberPath(argsPath, k);
     const d = expectObject(args[k], p);
-    members(d, ['type', 'valid'], ['extent', 'unit'], p);
+    members(d, ['type', 'valid'], ['extent', 'unit', 'classes', 'default', 'key_normalisation'], p);
     if (has(d, 'extent')) structExtent(d.extent, memberPath(p, 'extent'));
+    // SPEC 7 (since spec-0.5.0): classes, default and key_normalisation are structure, checked here
+    // before any canonical-form rule.
+    if (has(d, 'classes')) structClasses(d.classes, memberPath(p, 'classes'));
+    if (has(d, 'default') && d.default !== 'asof') fail('E_SCHEMA', 'default is "asof", the only value', memberPath(p, 'default'));
+    if (has(d, 'key_normalisation') && !isKeyRule(d.key_normalisation, false)) {
+      fail('E_SCHEMA', 'key_normalisation is one of the rules of 16.4 other than none (absent means none)', memberPath(p, 'key_normalisation'));
+    }
     expectString(d, 'type', p);
     if (has(d, 'unit')) structUnit(d.unit, memberPath(p, 'unit'));
     if (typeof d.valid !== 'boolean') fail('E_SCHEMA', 'valid must be a boolean', memberPath(p, 'valid'));
@@ -113,9 +121,27 @@ export function structSignature(v: JsonValue, path: string): void {
   const r = sig.returns;
   if (typeof r === 'string') return;
   if (!isObject(r)) fail('E_SCHEMA', 'returns must be a type name or an object', rp);
-  members(r, ['type'], ['unit'], rp);
+  members(r, ['type'], ['unit', 'classes'], rp);
   expectString(r, 'type', rp);
   if (has(r, 'unit')) structUnit(r.unit, memberPath(rp, 'unit'));
+  if (has(r, 'classes')) structClasses(r.classes, memberPath(rp, 'classes'));
+}
+
+/** SPEC 7 (since spec-0.5.0): `classes` is an array of strings; anything else is E_SCHEMA. */
+function structClasses(v: JsonValue, path: string): void {
+  if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) fail('E_SCHEMA', 'classes is an array of class names', path);
+}
+
+/**
+ * SPEC 7 (since spec-0.5.0): a non-empty array of full class names, ascending and unique. Each
+ * name first (E_CANON_NAME), then the set (E_CANON_SET).
+ */
+function canonClasses(a: string[], path: string): void {
+  a.forEach((s, i) => checkFunctionName(s, `${path}[${i}]`));
+  if (a.length === 0) fail('E_CANON_SET', 'classes is not empty', path);
+  for (let i = 1; i < a.length; i++) {
+    if (!(a[i - 1] < a[i])) fail('E_CANON_SET', 'classes is ascending and unique', path);
+  }
 }
 
 /** SPEC 7 (since spec-0.4.0): an extent is an array of lexical values (strings) or a range {hi, lo}. */
@@ -237,6 +263,17 @@ export function canonSignature(sig: JsonObject, path: string): void {
     if (d.valid === true && !VALID_TIME_TYPES.includes(d.type)) {
       fail('E_CANON_TYPE', 'a valid-time argument must be a date, instant or string', p);
     }
+    // SPEC 7 (since spec-0.5.0): then classes, default, key_normalisation.
+    if (has(d, 'classes')) {
+      if (d.type !== 'string') fail('E_CANON_TYPE', 'classes is for string arguments', memberPath(p, 'classes'));
+      canonClasses(d.classes as string[], memberPath(p, 'classes'));
+    }
+    if (has(d, 'default') && !((d.type === 'date' || d.type === 'instant') && d.valid === true)) {
+      fail('E_CANON_TYPE', 'default is for a valid-time date or instant argument', memberPath(p, 'default'));
+    }
+    if (has(d, 'key_normalisation') && (d.type !== 'string' || has(d, 'classes'))) {
+      fail('E_CANON_TYPE', 'key_normalisation is for a string argument without classes', memberPath(p, 'key_normalisation'));
+    }
     if (has(d, 'extent')) canonExtent(d.type, d.extent as JsonValue, memberPath(p, 'extent'));
   }
   // SPEC 7 (since spec-0.4.0): order lists every argument exactly once (E_CANON_SET).
@@ -256,6 +293,13 @@ export function canonSignature(sig: JsonObject, path: string): void {
   }
   const o = r as JsonObject;
   if (!isTypeName(o.type)) fail('E_CANON_TYPE', `unknown type ${JSON.stringify(o.type)}`, memberPath(rp, 'type'));
+  // SPEC 7 (since spec-0.5.0): a returned object key is {"type": "string", "classes": [...]}.
+  if (has(o, 'classes')) {
+    if (o.type !== 'string') fail('E_CANON_TYPE', 'a returned object key is a string', rp);
+    canonClasses(o.classes as string[], memberPath(rp, 'classes'));
+    if (has(o, 'unit')) fail('E_CANON_UNIT', 'a returned object key has no unit', rp);
+    return;
+  }
   if (o.type !== 'number') fail('E_CANON_UNIT', 'only a number return is written as an object', rp);
   if (!has(o, 'unit')) fail('E_CANON_UNIT', 'a number return declares its unit', rp);
   canonUnit(o.unit, args, memberPath(rp, 'unit'));
