@@ -5,9 +5,9 @@ specification side, in SPEC.md section 14.
 
 ## 0.6.0 — spec-0.6.0
 
-Conforms to the Datumesh specification revision `spec-0.6.0` (spec commit `05172a4`). The vector
-set is 1564 vectors: the 897 this library runs pass (818 of spec-0.5.0 and the 79 new ones: 16
-receipt, 36 envelope, 22 describe, 5 mesh), and the 667 formula-dialect vectors, the 11 new `call`
+Conforms to the Datumesh specification revision `spec-0.6.0` (spec commit `941d9b5`). The vector
+set is 1569 vectors: the 902 this library runs pass (818 of spec-0.5.0 and the 84 new ones: 16
+receipt, 41 envelope, 22 describe, 5 mesh), and the 667 formula-dialect vectors, the 11 new `call`
 vectors included, are skipped as before.
 
 **Compatibility.** A mesh that serves receipts with `source` is unverifiable by clients on core < 0.3.9 or datumesh < 0.6.0 (@datumesh/verify < 0.6.0); such receipts are new, and every receipt signed before them verifies unchanged.

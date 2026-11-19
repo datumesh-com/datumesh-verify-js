@@ -16,12 +16,12 @@ const keysOf = (v) => Object.entries(v.keys).map(([h, e]) => keysFromResponse(h,
 const STATUS = { ok: [200], stale: [200], not_covered: [404], unlicensed: [403], payment_required: [402], rate_limited: [429], bad_request: [400], pending: [202], scenario: [200] }; // scenario since spec-0.6.0 (5.9)
 const matches = (outcome, s) => (outcome === 'error' ? s >= 500 && s <= 599 : STATUS[outcome].includes(s));
 // spec-0.5.0: no `error` envelope carries the define and write codes, the class codes (define's), E_SHORT_ID_AMBIGUOUS (a bad_request code) or E_DESCRIBE (a client's code); the reference tool agrees; since c8896ad SPEC 5.5 lists them all, with the key codes E_KEY_NORMALISATION and E_KEY_ENCODING.
-const NOT_IN_ERROR_ENVELOPE = ['E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_DESCRIBE']; // c8896ad: the two key codes are request (bad_request) codes too (SPEC 5.5)
+const NOT_IN_ERROR_ENVELOPE = ['E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_DESCRIBE', 'E_WHATIF_UNSUPPORTED', 'E_WHATIF_NO_SOLUTION']; // c8896ad: the two key codes are request (bad_request) codes too (SPEC 5.5)
 const OTHER = [100, 199, 200, 201, 204, 301, 302, 304, 400, 401, 402, 403, 404, 409, 429, 499, 500, 502, 503, 599, 600, 0, 999];
 
 test('there are envelope vectors for every outcome', () => {
-  assert.equal(allEnvelopes.length, 204); // spec-0.6.0 (640898c): + 36 (9 valid: relayed, 5 scenario, 3 cycle; 27 invalid); c8896ad was 168: c8896ad: + 6 (2 valid bad_request, 4 invalid: key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 19 (9 valid, 10 invalid); a468606: + 5; fc870ab: + 1; spec-0.4.3: + 7 (E_FOREIGN_UNAVAILABLE)
-  assert.equal(envelopes.length, 183); // spec-0.6.0: + 36 (none answers the slice endpoint); c8896ad was 147: c8896ad: + 6 (key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 17 (the 2 loopback slice pages are in the 21 that answer the slice endpoint); spec-0.4.3: + 7 // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
+  assert.equal(allEnvelopes.length, 209); // spec-0.6.0 (941d9b5): + 41 (12 valid: relayed, 5 scenario, 3 cycle, 3 whatif; 29 invalid: 2 whatif); spec-0.6.0 (640898c): + 36 (9 valid: relayed, 5 scenario, 3 cycle; 27 invalid); c8896ad was 168: c8896ad: + 6 (2 valid bad_request, 4 invalid: key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 19 (9 valid, 10 invalid); a468606: + 5; fc870ab: + 1; spec-0.4.3: + 7 (E_FOREIGN_UNAVAILABLE)
+  assert.equal(envelopes.length, 188); // spec-0.6.0 (941d9b5): + 5 whatif (none answers the slice endpoint); spec-0.6.0: + 36 (none answers the slice endpoint); c8896ad was 147: c8896ad: + 6 (key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 17 (the 2 loopback slice pages are in the 21 that answer the slice endpoint); spec-0.4.3: + 7 // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
   const outcomes = new Set(envelopes.filter((v) => v.valid).map((v) => v.outcome));
   assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'pending', 'rate_limited', 'scenario', 'stale', 'unlicensed']);
 });
@@ -125,6 +125,10 @@ test('member values (step 2)', () => {
   const PARSE = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
   // spec-0.4.2: + E_CANON_HEX (a pin) and E_SLICE_AT_CELL.
   for (const c of ERROR_CODES) assert.equal(codeOf(400, { outcome: 'bad_request', error: c }), [...PARSE, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING'].includes(c) ? 'OK' : 'E_ENVELOPE', c);
+  // spec-0.6.0 (5.9): E_WHATIF_UNSUPPORTED is the code of a whatif request with solve only; without solve it is E_ENVELOPE.
+  const WHATIF = allEnvelopes.find((v) => v.id === 'envelope/whatif-bad-request-unsupported').request;
+  assert.equal(checkEnvelope(400, '{"outcome":"bad_request","error":"E_WHATIF_UNSUPPORTED"}', KEYS, WHATIF).code, 'OK');
+  assert.equal(codeOf(400, { outcome: 'bad_request', error: 'E_WHATIF_UNSUPPORTED' }), 'E_ENVELOPE');
   assert.equal(codeOf(400, { outcome: 'bad_request' }), 'E_ENVELOPE');
   assert.equal(codeOf(400, { outcome: 'bad_request', error: 'E_PARSE_URI', receipt: R }), 'E_ENVELOPE');
   assert.equal(codeOf(500, { outcome: 'bad_request', error: 'E_PARSE_URI' }), 'E_ENVELOPE');

@@ -74,11 +74,11 @@ test('versions name spec-0.6.0 and 0.6.0 (both builds, package.json)', () => {
   assert.equal(pkg.datumesh.spec, 'spec-0.6.0');
 });
 
-test('the spec submodule is at 640898c: 1564 vectors, 90 of them new (11 call, skipped)', () => {
-  assert.equal(all.length, 1564);
-  assert.equal(fresh.length, 90);
+test('the spec submodule is at 941d9b5: 1569 vectors, 95 of them new (11 call, skipped)', () => {
+  assert.equal(all.length, 1569);
+  assert.equal(fresh.length, 95);
   assert.equal(fresh.filter((v) => v.kind === 'call').length, 11);
-  assert.equal(fresh.filter((v) => !SKIPPED_KINDS.includes(v.kind)).length, 79);
+  assert.equal(fresh.filter((v) => !SKIPPED_KINDS.includes(v.kind)).length, 84);
 });
 
 test('the CHANGELOG has the 0.6.0 entry with the spec-0.6.0 compatibility line (C2, verbatim)', () => {
@@ -93,7 +93,7 @@ test('the CHANGELOG has the 0.6.0 entry with the spec-0.6.0 compatibility line (
 // ------------------------------------------------------------------------------------------
 
 test('the runner runs every new receipt, envelope, describe and mesh vector and skips the call ones', async () => {
-  assert.deepEqual([ids('receipt').length, ids('envelope').length, ids('describe').length, ids('mesh').length], [16, 36, 22, 5]);
+  assert.deepEqual([ids('receipt').length, ids('envelope').length, ids('describe').length, ids('mesh').length], [16, 41, 22, 5]);
   for (const k of ['receipt', 'envelope', 'describe', 'mesh']) await conforms(ids(k));
   for (const v of fresh.filter((x) => x.kind === 'call')) assert.deepEqual(await run(v), { id: v.id, error: null, skipped: 'call' }, v.id);
 });
@@ -412,10 +412,14 @@ test('solve: solved is present exactly when solve was sent, and states the value
   assert.equal(r.scenario.solved.value.type, 'number');
   assert.equal(typeof r.scenario.solved.value.value, 'string');
   assert.equal(r.scenario.solved.vary.fn, 'fx_rate');
-  // The same body when no solve was sent: E_ENVELOPE (solved unrequested).
+  // The same body when no solve was sent: E_ENVELOPE (solved unrequested). This request has overrides: [] and no solve,
+  // which is the caller's error (a TypeError, 5.9); the body is checked with a non-empty overrides request instead.
   const noSolve = { ...v.request };
   delete noSolve.solve;
-  const a = env(v, v.input, v.status, noSolve);
+  assert.throws(() => env(v, v.input, v.status, noSolve), TypeError);
+  const withOverrides = JSON.parse(v.input);
+  withOverrides.scenario.solved = JSON.parse(v.input).scenario.solved;
+  const a = env(S, JSON.stringify(withOverrides), S.status, S.request);
   assert.deepEqual([a.ok, a.code], [false, 'E_ENVELOPE']);
   // Sent solve naming another vary cell: E_ENVELOPE.
   const b = env(v, v.input, v.status, { ...v.request, solve: '0'.repeat(64) });
@@ -455,8 +459,8 @@ test('scenario outcome: only with overrides in the request; ok, stale and pendin
   delete noOverrides.overrides;
   const a = env(S, S.input, 200, noOverrides);
   assert.deepEqual([a.ok, a.code, a.kind], [false, 'E_ENVELOPE', null]);
-  const emptyOverrides = env(S, S.input, 200, { ...S.request, overrides: [] });
-  assert.equal(emptyOverrides.code, 'E_ENVELOPE'); // an empty array is not the echo of two overrides
+  // An empty overrides array without solve is the caller's error (a TypeError, 5.9), not an echo of no overrides.
+  assert.throws(() => env(S, S.input, 200, { ...S.request, overrides: [] }), TypeError);
   // ok with overrides in the request.
   for (const id of ['invalid/envelope-ok-with-overrides', 'invalid/envelope-stale-with-overrides']) {
     const v = byId[id];
@@ -476,25 +480,34 @@ test('other outcomes at whatif: not_covered, bad_request with the whatif and ove
   const nc = byId['envelope/scenario-not-covered'];
   assert.equal(env(nc).ok, true);
   const bad = (error, status = 400) => env(S, JSON.stringify({ outcome: 'bad_request', error }), status);
-  for (const code of ['E_WHATIF_UNSUPPORTED', 'E_CANON_ARG_DUPLICATE', 'E_CANON_TYPE', 'E_SLICE_MEMBER']) {
+  for (const code of ['E_CANON_ARG_DUPLICATE', 'E_CANON_TYPE', 'E_SLICE_MEMBER']) {
     const r = bad(code);
     assert.equal(r.ok, true, `${code}: ${r.detail}`);
     assert.equal(r.outcome, 'bad_request');
     assert.equal(r.error, code);
     assert.equal(r.kind, null);
   }
-  const nosol = env(S, JSON.stringify({ outcome: 'not_covered', fault: 'E_WHATIF_NO_SOLUTION' }), 404);
+  // E_WHATIF_UNSUPPORTED and E_WHATIF_NO_SOLUTION are the codes of a whatif request with solve only (5.9).
+  const withSolve = byId['envelope/whatif-bad-request-unsupported'].request;
+  const u = env(S, JSON.stringify({ outcome: 'bad_request', error: 'E_WHATIF_UNSUPPORTED' }), 400, withSolve);
+  assert.equal(u.ok, true, u.detail);
+  assert.equal(u.outcome, 'bad_request');
+  assert.equal(u.error, 'E_WHATIF_UNSUPPORTED');
+  assert.equal(u.kind, null);
+  assert.equal(bad('E_WHATIF_UNSUPPORTED').code, 'E_ENVELOPE'); // S has no solve
+  const nosol = env(S, JSON.stringify({ outcome: 'not_covered', fault: 'E_WHATIF_NO_SOLUTION' }), 404, withSolve);
   assert.equal(nosol.ok, true, nosol.detail);
   assert.equal(nosol.outcome, 'not_covered');
   assert.equal(nosol.fault, 'E_WHATIF_NO_SOLUTION');
   assert.equal(nosol.error, null);
+  assert.equal(env(S, JSON.stringify({ outcome: 'not_covered', fault: 'E_WHATIF_NO_SOLUTION' }), 404).code, 'E_ENVELOPE'); // no solve
   const wrong = env(S, JSON.stringify({ outcome: 'not_covered', fault: 'E_WHATIF_UNSUPPORTED' }), 404);
   assert.equal(wrong.code, 'E_ENVELOPE'); // not a fault
 });
 
 test('every new envelope vector conforms and the invalid ones give E_ENVELOPE', async () => {
   const invalid = ids('envelope', false);
-  assert.equal(invalid.length, 27);
+  assert.equal(invalid.length, 29);
   for (const id of invalid) assert.equal(byId[id].error, 'E_ENVELOPE', id);
   await conforms(ids('envelope'));
 });
@@ -589,10 +602,11 @@ test('class and object describe answers still return their kind', () => {
 test('with the descriptor held, args and returns must agree with it; each failure is E_DESCRIBE', () => {
   const v = D('describe/function-tests-source');
   const base = JSON.parse(v.input);
-  const code = (f, held = v.functions) => {
+  // The held descriptors are the second argument when one is passed: undefined is then "not held", not the default.
+  const code = (f, ...held) => {
     const a = clone(base);
     f(a);
-    return codeOf(() => checkDescribe(JSON.stringify(a), v.classes, held));
+    return codeOf(() => checkDescribe(JSON.stringify(a), v.classes, held.length ? held[0] : v.functions));
   };
   assert.equal(code(() => {}), 'OK');
   assert.equal(code((a) => delete a.args.quote), 'E_DESCRIBE');
