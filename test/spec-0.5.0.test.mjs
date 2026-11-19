@@ -45,6 +45,7 @@ async function conforms(ids) {
   }
 }
 const idsWhere = (f) => all.filter(f).map((v) => v.id);
+const isNew060 = (v) => /^spec-0\.6\.0/.test(v.description ?? ''); // build2-part1: the new vectors are not part of the older blocks
 
 /** Probes: the reference tool's verdict for each (item, vector); `success` means accepted. */
 const probes = gunzipSync(readFileSync(join(root, 'test', 'fixtures', 'oracle-probes-0.5.0.jsonl.gz'))).toString('utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -65,18 +66,20 @@ async function agreesOnProbes(item) {
 // Versions (the package, both builds)
 // ------------------------------------------------------------------------------------------
 
-test('versions name spec-0.5.0 and 0.5.1 (0.5.0 tagged, not published)', () => {
-  assert.equal(lib.SPEC_VERSION, 'spec-0.5.0');
-  assert.equal(lib.VERSION, '0.5.1');
-  assert.equal(cjs.VERSION, '0.5.1');
+// Superseded on build2-part1: the versions are spec-0.6.0 and 0.6.0 (test/spec-0.6.0.test.mjs). What stays true of 0.5.x is that the
+// two builds agree with each other and with package.json.
+test('versions: both builds and package.json agree (spec-0.5.0 and 0.5.1 until build2-part1, spec-0.6.0 and 0.6.0 after)', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.5.1');
-  assert.equal(pkg.datumesh.spec, 'spec-0.5.0');
+  assert.equal(lib.VERSION, pkg.version);
+  assert.equal(cjs.VERSION, pkg.version);
+  assert.equal(cjs.SPEC_VERSION, lib.SPEC_VERSION);
+  assert.equal(pkg.datumesh.spec, lib.SPEC_VERSION);
 });
 
-test('the spec submodule is spec-0.5.0 (c8896ad) and the set has 1474 vectors', () => {
-  assert.equal(all.length, 1474);
-  assert.ok(readFileSync(join(root, 'spec', 'SPEC.md'), 'utf8').startsWith('# Datumesh protocol, version 1\n\nStatus: draft, revision `spec-0.5.0`'));
+// build2-part1: the submodule is at 640898c (spec-0.6.0, vectors only); the spec-0.5.0 set of 1474 vectors is the ones whose description
+// does not start with "spec-0.6.0" (the set of 0.6.0's own is counted in test/spec-0.6.0.test.mjs).
+test('the spec-0.5.0 set (c8896ad) is still all there: 1474 vectors, none of them changed', () => {
+  assert.equal(all.filter((v) => !isNew060(v)).length, 1474);
 });
 
 test('both builds export the new functions', () => {
@@ -839,7 +842,7 @@ test('item 7: probes agree with the reference tool (key encodings)', async () =>
 // ------------------------------------------------------------------------------------------
 
 test('item 8: the describe vectors (6 valid, 18 invalid)', async () => {
-  await conforms(idsWhere((v) => v.kind === 'describe'));
+  await conforms(idsWhere((v) => v.kind === 'describe' && !isNew060(v)));
 });
 
 test('item 8: a class answer and an object answer pass; the result names the kind', () => {
@@ -1012,13 +1015,13 @@ test('item 10: the runner runs the new kinds and skips the same five', async () 
   assert.deepEqual(OUTPUTS.key, ['decoded', 'object', 'object_id', 'class_hash']); // c8896ad: the last three for a vector given class_hash (class_hash echoed, the reference's output form)
   assert.deepEqual(OUTPUTS.define, ['canonical', 'sha256']);
   assert.deepEqual([OUTPUTS.normalisation, OUTPUTS.describe], [[], []]);
-  for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && x.valid)) {
+  for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && x.valid && !isNew060(x))) {
     const got = await run(v);
     const outputs = v.kind === 'key' && v.class_hash === undefined ? ['decoded'] : OUTPUTS[v.kind];
     assert.deepEqual(Object.keys(got).sort(), ['error', 'id', ...outputs].sort(), v.id);
     assert.equal(got.error, null, v.id);
   }
-  for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && !x.valid)) assert.deepEqual(await run(v), { id: v.id, error: v.error }, v.id);
+  for (const v of all.filter((x) => ['class', 'normalisation', 'key', 'describe', 'define'].includes(x.kind) && !x.valid && !isNew060(x))) assert.deepEqual(await run(v), { id: v.id, error: v.error }, v.id);
   for (const v of all.filter((x) => SKIPPED_KINDS.includes(x.kind)).slice(0, 5)) assert.deepEqual(await run(v), { id: v.id, error: null, skipped: v.kind });
 });
 
@@ -1046,7 +1049,7 @@ test('item 10: entitlement collects L as step 7.5 does, in inputs order, with it
 });
 
 test('the old vectors still conform (the conformance test is the full run; this is a spot check of every older kind)', async () => {
-  const older = all.filter((v) => !/spec-0\.5\.0/.test(v.description ?? '') && !SKIPPED_KINDS.includes(v.kind));
+  const older = all.filter((v) => !/spec-0\.5\.0/.test(v.description ?? '') && !isNew060(v) && !SKIPPED_KINDS.includes(v.kind));
   assert.ok(older.length > 600);
   const bad = [];
   for (const v of older) if (compare(v, await run(v)).length) bad.push(v.id);
@@ -1231,7 +1234,7 @@ test('re-pin 4: in a class key an unknown rule is E_CLASS_MEMBER (16.1); none is
 // Re-pin 5: the describe check is six numbered steps (16.8)
 // ------------------------------------------------------------------------------------------
 
-const describeVectors = idsWhere((v) => v.kind === 'describe');
+const describeVectors = idsWhere((v) => v.kind === 'describe' && !isNew060(v));
 const callOf = (o) => `${o.class}(${Object.keys(o.keys).sort().map((k) => `${k}: ${o.keys[k].type === 'string' ? `"${o.keys[k].value.replaceAll('"', '""')}"` : o.keys[k].value}`).join(', ')})`;
 /** An object answer for `a` with `f` applied to its object and the ids and call form recomputed, so that only step 5 can fail. */
 const objectAnswer = (a, f) => {

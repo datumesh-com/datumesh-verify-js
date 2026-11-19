@@ -13,23 +13,23 @@ import { loadVectors, vector } from './helpers.mjs';
 const allEnvelopes = loadVectors().filter((v) => v.kind === 'envelope');
 const envelopes = allEnvelopes.filter((v) => !Object.prototype.hasOwnProperty.call(v.request, 'slice_id'));
 const keysOf = (v) => Object.entries(v.keys).map(([h, e]) => keysFromResponse(h, typeof e.https.status === 'number' ? e.https.status : null, e.https.body));
-const STATUS = { ok: [200], stale: [200], not_covered: [404], unlicensed: [403], payment_required: [402], rate_limited: [429], bad_request: [400], pending: [202] };
+const STATUS = { ok: [200], stale: [200], not_covered: [404], unlicensed: [403], payment_required: [402], rate_limited: [429], bad_request: [400], pending: [202], scenario: [200] }; // scenario since spec-0.6.0 (5.9)
 const matches = (outcome, s) => (outcome === 'error' ? s >= 500 && s <= 599 : STATUS[outcome].includes(s));
 // spec-0.5.0: no `error` envelope carries the define and write codes, the class codes (define's), E_SHORT_ID_AMBIGUOUS (a bad_request code) or E_DESCRIBE (a client's code); the reference tool agrees; since c8896ad SPEC 5.5 lists them all, with the key codes E_KEY_NORMALISATION and E_KEY_ENCODING.
 const NOT_IN_ERROR_ENVELOPE = ['E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_DESCRIBE']; // c8896ad: the two key codes are request (bad_request) codes too (SPEC 5.5)
 const OTHER = [100, 199, 200, 201, 204, 301, 302, 304, 400, 401, 402, 403, 404, 409, 429, 499, 500, 502, 503, 599, 600, 0, 999];
 
 test('there are envelope vectors for every outcome', () => {
-  assert.equal(allEnvelopes.length, 168); // c8896ad: + 6 (2 valid bad_request, 4 invalid: key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 19 (9 valid, 10 invalid); a468606: + 5; fc870ab: + 1; spec-0.4.3: + 7 (E_FOREIGN_UNAVAILABLE)
-  assert.equal(envelopes.length, 147); // c8896ad: + 6 (key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 17 (the 2 loopback slice pages are in the 21 that answer the slice endpoint); spec-0.4.3: + 7 // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
+  assert.equal(allEnvelopes.length, 204); // spec-0.6.0 (640898c): + 36 (9 valid: relayed, 5 scenario, 3 cycle; 27 invalid); c8896ad was 168: c8896ad: + 6 (2 valid bad_request, 4 invalid: key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 19 (9 valid, 10 invalid); a468606: + 5; fc870ab: + 1; spec-0.4.3: + 7 (E_FOREIGN_UNAVAILABLE)
+  assert.equal(envelopes.length, 183); // spec-0.6.0: + 36 (none answers the slice endpoint); c8896ad was 147: c8896ad: + 6 (key codes, class code and E_DESCRIBE in error); spec-0.5.0: + 17 (the 2 loopback slice pages are in the 21 that answer the slice endpoint); spec-0.4.3: + 7 // 19 answer the slice endpoint // spec-0.4.2: + 38 (pins, the two codes, computed, slice pages) // spec-0.4.0: + not-covered-fault and two invalid fault envelopes; spec-0.4.1: + 6 valid and 20 invalid (pending, job results, E_JOB_UNKNOWN), 3 more at 3f79313 (poll's host)
   const outcomes = new Set(envelopes.filter((v) => v.valid).map((v) => v.outcome));
-  assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'pending', 'rate_limited', 'stale', 'unlicensed']);
+  assert.deepEqual([...outcomes].sort(), ['bad_request', 'error', 'not_covered', 'ok', 'payment_required', 'pending', 'rate_limited', 'scenario', 'stale', 'unlicensed']);
 });
 
 for (const v of envelopes) {
   test(`checkEnvelope: ${v.id} -> ${v.valid ? v.outcome : v.error}`, () => {
     const r = checkEnvelope(v.status, v.input, keysOf(v), v.request);
-    assert.deepEqual(Object.keys(r).sort(), ['code', 'detail', 'error', 'fault', 'fnHash', 'foreignDetail', 'ok', 'outcome', 'path', 'pending', 'receiptHash', 'resolved', 'shadows', 'trust']); // fault since spec-0.4.0, pending since spec-0.4.1, fnHash since spec-0.4.2, foreignDetail since spec-0.4.3, error, resolved and shadows since spec-0.5.0
+    assert.deepEqual(Object.keys(r).filter((k) => !['cycle', 'kind', 'scenario'].includes(k)).sort(), ['code', 'detail', 'error', 'fault', 'fnHash', 'foreignDetail', 'ok', 'outcome', 'path', 'pending', 'receiptHash', 'resolved', 'shadows', 'trust']); // spec-0.6.0 adds cycle, kind and scenario (checked in spec-0.6.0.test.mjs); // fault since spec-0.4.0, pending since spec-0.4.1, fnHash since spec-0.4.2, foreignDetail since spec-0.4.3, error, resolved and shadows since spec-0.5.0
     if (v.valid) {
       assert.equal(r.ok, true, r.detail);
       assert.equal(r.code, 'OK');

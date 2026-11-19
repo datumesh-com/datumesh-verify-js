@@ -35,7 +35,7 @@ assert m, "no result element in the dumped DOM"
 s = json.loads(html.unescape(m.group(1)))
 print(json.dumps(s, indent=1))
 assert "error" not in s, s.get("error")
-assert s["vectors"] == {"pass": 818, "fail": 0, "failures": []}, s["vectors"]  # spec-0.5.0 (c8896ad): 818 library vectors
+assert s["vectors"] == {"pass": 897, "fail": 0, "failures": []}, s["vectors"]  # spec-0.6.0 (640898c): 897 library vectors (818 + 79 new)
 assert s["uriRoundTrips"] == 15 and s["ed25519"]["fail"] == 0 and s["ed25519"]["pass"] > 0
 assert s["unflippedOk"] is True and s["bitFlips"] > 5000 and s["bitFlipFailures"] == 0
 assert s["blobOk"] is True and s["blobFlips"] == 368 and s["blobFlipFailures"] == 0

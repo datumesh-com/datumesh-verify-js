@@ -32,7 +32,7 @@ export const OUTPUTS = {
 };
 
 /** The endpoints SPEC 9.6 defines; a resolved mesh keeps only these. */
-export const MESH_ENDPOINTS = ['blob', 'cell', 'cells', 'descriptor', 'explain', 'find', 'jobs', 'manifest', 'receipt', 'slice', 'verify'];
+export const MESH_ENDPOINTS = ['blob', 'cell', 'cells', 'descriptor', 'explain', 'find', 'jobs', 'manifest', 'receipt', 'slice', 'verify', 'whatif'];
 
 /**
  * The expected outputs of a valid vector: the file's own. (At 0dac072 the valid `mesh` vectors
@@ -262,6 +262,9 @@ export function makeRunner(lib, sha256) {
           const res = lib.checkEnvelope(v.status, inputOf(v), receiptKeys(lib, v), v.request);
           if (!res.ok) return { id: v.id, error: res.code };
           out.outcome = res.outcome;
+          // Since spec-0.6.0 (5.9): a checked scenario is its own result kind, never a receipt: it has no
+          // receipt hash and no trust, and the runner's output has neither (SPEC 11: only with a receipt).
+          if (res.kind === 'scenario' && (res.receiptHash !== null || res.trust !== null || !res.scenario)) throw new Error('a scenario result must have a scenario and neither receiptHash nor trust');
           if (res.receiptHash !== null) {
             out.trust = res.trust;
             out.receipt_hash = res.receiptHash;
