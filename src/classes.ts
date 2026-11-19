@@ -67,12 +67,14 @@ export interface DescribeSource {
 /**
  * What `checkDescribe` found: the answer's kind (16.8). A class and an object answer are checked
  * as far as the held descriptors allow; since spec-0.6.0 a function answer (`kind` "function")
- * carries its `fn`, `fnHash`, and its `tests` and `source` when it has them (else null).
+ * carries its `fn`, `fnHash`, and its `tests` and `source` when it has them (else null). Since
+ * spec-0.6.1 a class or function answer carries its `publisher` (16.8), the host of its name, or null
+ * when the answer has none.
  */
 export type DescribeResult =
-  | { kind: 'class' }
+  | { kind: 'class'; publisher: string | null }
   | { kind: 'object' }
-  | { kind: 'function'; fn: string; fnHash: string; tests: DescribeTests | null; source: DescribeSource | null };
+  | { kind: 'function'; fn: string; fnHash: string; publisher: string | null; tests: DescribeTests | null; source: DescribeSource | null };
 
 // ---------------------------------------------------------------- helpers
 
@@ -745,8 +747,8 @@ export function checkDescribe(answer: unknown, classes: { [name: string]: unknow
   try {
     if (!isObject(a)) fail('E_DESCRIBE', 'a describe answer is a JSON object', '$');
     if (a.kind === 'class') {
-      checkClassAnswer(a, functions ?? [], numbers);
-      return { kind: 'class' };
+      const publisher = checkClassAnswer(a, functions ?? [], numbers);
+      return { kind: 'class', publisher };
     }
     if (a.kind === 'object') {
       checkObjectAnswer(a, classes);
@@ -795,6 +797,20 @@ function checkSource(v: JsonValue, path: string): DescribeSource {
   return { name: v.name as string, relayed_by: v.relayed_by as string, takeover: t };
 }
 
+/**
+ * Since spec-0.6.1 (16.8, D108): the optional `publisher` of a class or function answer, a DNS name (2.1)
+ * that is exactly the host of the name it describes, and never the domain of a later segment. Returns
+ * it, or null when the answer has none.
+ */
+function checkPublisher(a: JsonObject, name: string, path: string): string | null {
+  if (!has(a, 'publisher')) return null;
+  const p = a.publisher;
+  if (typeof p !== 'string') fail('E_DESCRIBE', 'publisher is a DNS name', memberPath(path, 'publisher'));
+  checkDnsName(p, memberPath(path, 'publisher'));
+  if (p !== name.split('/')[0]) fail('E_DESCRIBE', 'publisher is the host of the name it describes (2.3)', memberPath(path, 'publisher'));
+  return p;
+}
+
 /** Step 2 for a description: a string of 1 to 1024 bytes valid by 3.5. */
 function checkDescription(d: unknown, path: string): void {
   if (typeof d !== 'string' || d.length === 0) fail('E_DESCRIBE', 'description is a non-empty string', path);
@@ -814,9 +830,10 @@ function checkMethodSignature(fn: JsonObject, desc: JsonObject, e: JsonObject, p
 
 /** Since spec-0.6.0 (16.8): a function answer, checked against the held descriptor of its fn_hash, when held. */
 function checkFunctionAnswer(a: JsonObject, functions: unknown[], numbers: Map<string, string>): DescribeResult {
-  hasExactly(a, ['kind', 'fn', 'fn_hash', 'args', 'returns'], ['description', 'tests', 'source'], 'a function answer');
+  hasExactly(a, ['kind', 'fn', 'fn_hash', 'args', 'returns'], ['description', 'tests', 'source', 'publisher'], 'a function answer');
   if (typeof a.fn !== 'string') fail('E_DESCRIBE', 'fn is a function name', '$.fn');
   checkFunctionName(a.fn, '$.fn');
+  const publisher = checkPublisher(a, a.fn, '$');
   if (!isLowerHex64(a.fn_hash)) fail('E_DESCRIBE', 'fn_hash is 64 lowercase hex digits', '$.fn_hash');
   if (!isObject(a.args)) fail('E_DESCRIBE', 'args is an object', '$.args');
   if (has(a, 'description')) checkDescription(a.description, '$.description');
@@ -829,13 +846,14 @@ function checkFunctionAnswer(a: JsonObject, functions: unknown[], numbers: Map<s
     if (jcsOf(a.args as JsonObject) !== jcsOf(sig.args as JsonObject)) fail('E_DESCRIBE', "args are the function's arguments, all of them", '$.args');
     if (jcsOf(a.returns as JsonValue) !== jcsOf(sig.returns as JsonValue)) fail('E_DESCRIBE', "returns is the function's return", '$.returns');
   }
-  return { kind: 'function', fn: a.fn as string, fnHash: a.fn_hash as string, tests, source };
+  return { kind: 'function', fn: a.fn as string, fnHash: a.fn_hash as string, publisher, tests, source };
 }
 
-function checkClassAnswer(a: JsonObject, functions: unknown[], numbers: Map<string, string>): void {
-  hasExactly(a, ['kind', 'class', 'class_hash', 'descriptor', 'methods'], [], 'a class answer');
+function checkClassAnswer(a: JsonObject, functions: unknown[], numbers: Map<string, string>): string | null {
+  hasExactly(a, ['kind', 'class', 'class_hash', 'descriptor', 'methods'], ['publisher'], 'a class answer');
   if (typeof a.class !== 'string') fail('E_DESCRIBE', 'class is a name', '$.class');
   checkFunctionName(a.class, '$.class');
+  const publisher = checkPublisher(a, a.class, '$');
   if (!isLowerHex64(a.class_hash)) fail('E_DESCRIBE', 'class_hash is 64 lowercase hex digits', '$.class_hash');
   if (!isObject(a.descriptor)) fail('E_DESCRIBE', 'descriptor is an object', '$.descriptor');
   const desc = checkClassDescriptor(a.descriptor); // step 2: the structure of a class descriptor
@@ -860,6 +878,7 @@ function checkClassAnswer(a: JsonObject, functions: unknown[], numbers: Map<stri
     const fn = held.get(dm[m] as string);
     if (fn) checkMethodSignature(fn, desc, e, path);
   }
+  return publisher;
 }
 
 function checkObjectAnswer(a: JsonObject, classes: { [name: string]: unknown }): void {

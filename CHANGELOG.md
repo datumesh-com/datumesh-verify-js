@@ -3,6 +3,21 @@
 Releases of `@datumesh/verify`. Earlier releases are described in the commit log and, for the
 specification side, in SPEC.md section 14.
 
+## 0.6.1 — spec-0.6.1
+
+Conforms to the Datumesh specification revision `spec-0.6.1` (spec commit `42979b5`). The vector
+set is 1711 vectors: the 1024 this library runs pass (the 902 of spec-0.6.0 and the 122 new ones:
+define 28, cell 24, uri 25, describe 19, envelope 9, receipt 7, class 5, function 4, jcs 1), and
+the 687 formula-dialect vectors (the 17 new `formula` and 3 new `formula-eval` included) are
+skipped as before.
+
+**Compatibility.** A mesh that serves a name with a DNS name in a later segment (for example `datumesh.com/relay/ecb.europa.eu/fx_reference`) is unreadable by clients on @datumesh/verify < 0.6.1: such a name is refused with `E_CANON_NAME` in a cell URI, a cell, a receipt, a descriptor and a describe answer. Every name valid before is valid after, and every receipt signed before verifies unchanged.
+
+- **DNS names in later segments** (SPEC 2.3, 5.1, 4.5). A segment after the host is a `name` (64 characters) or a DNS name (253 characters, 2.1); the whole function name keeps 512. The last segment, a class name's last segment and a method name stay `name`. A later DNS name is a label only: the host alone publishes the keys, decides whether a namespace is unrooted (`isUnrooted`, 2.5) and is a cell's publisher.
+- **Describe publisher** (SPEC 16.8). An optional `publisher` of a class or function answer must be the host of its name, a DNS name, else `E_DESCRIBE`. `checkDescribe` returns it: `publisher` is a member of the class and function results, `null` when the answer has none. An answer without it passes as before.
+- **Test cells** (SPEC 7.3). `<host>/test_case` cells are ordinary stored cells: the envelope and receipt checks need no change, and the vectors for them pass.
+- **Unchanged API.** No function is removed or changed in signature; the result objects of `checkDescribe` gain `publisher`.
+
 ## 0.6.0 — spec-0.6.0
 
 Conforms to the Datumesh specification revision `spec-0.6.0` (spec commit `941d9b5`). The vector

@@ -1,5 +1,5 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.6.0';
+export const SPEC_VERSION = 'spec-0.6.1';
 
 /**
  * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` and

@@ -57,11 +57,22 @@ export function checkDnsName(s: string, path: string): void {
   if (s.length > 253) fail('E_CANON_NAME', 'DNS name longer than 253 characters', path);
 }
 
-/** SPEC 2.3: dns-name *( "/" name ). */
+/**
+ * SPEC 2.3 (since spec-0.6.1): a segment after the host is a `name` (2.2, 64 characters) or a DNS
+ * name (2.1, 253 characters). A run with a `.` is a DNS name and is checked as one, so its failures
+ * are E_CANON_NAME; a run with no `.` must be a name, else it is E_CANON_NAME (`bank-x`).
+ */
+export function checkSegment(s: string, path: string): void {
+  if (NAME_RE.test(s)) checkName(s, path);
+  else if (s.includes('.')) checkDnsName(s, path);
+  else fail('E_CANON_NAME', `not a name or a DNS name: ${JSON.stringify(s)}`, path);
+}
+
+/** SPEC 2.3: dns-name *( "/" segment ). The host is a DNS name; a later segment is a name or a DNS name. */
 export function checkNamespace(s: string, path: string): void {
   const parts = s.split('/');
   checkDnsName(parts[0], path);
-  for (const seg of parts.slice(1)) checkName(seg, path);
+  for (const seg of parts.slice(1)) checkSegment(seg, path);
 }
 
 /** SPEC 2.3: namespace "/" name, at most 512 characters. */

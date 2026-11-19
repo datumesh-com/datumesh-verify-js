@@ -12,12 +12,12 @@ import { loadVectors } from './helpers.mjs';
 const vectors = loadVectors();
 const applicable = vectors.filter((v) => !SKIPPED_KINDS.includes(v.kind));
 
-test('the vector set is complete (1569 vectors at spec-0.6.0 941d9b5: 902 for verifier libraries, 667 formula-evaluator vectors; 1564 and 897 at 640898c; 1474, 818 and 656 at c8896ad)', () => {
-  assert.equal(vectors.length, 1569);
+test('the vector set is complete (1711 vectors at spec-0.6.1 42979b5: 1024 for verifier libraries, 687 formula-evaluator vectors; 1569, 902 and 667 at spec-0.6.0 941d9b5; 1564 and 897 at 640898c; 1474, 818 and 656 at c8896ad)', () => {
+  assert.equal(vectors.length, 1711);
   const kinds = new Set(vectors.map((v) => v.kind));
   assert.deepEqual([...kinds].sort(), ['batch', 'call', 'cell', 'class', 'decimal', 'define', 'describe', 'entitlement', 'envelope', 'excel', 'formula', 'formula-eval', 'function', 'jcs', 'key', 'keyid', 'keys', 'licence', 'mesh', 'normalisation', 'receipt', 'ref', 'scalar', 'slice', 'unit', 'uri']);
   assert.deepEqual([...SKIPPED_KINDS].sort(), ['call', 'decimal', 'excel', 'formula', 'formula-eval']);
-  assert.equal(applicable.length, 902); // spec-0.6.0 (941d9b5): + 5 envelope (whatif); spec-0.6.0 (640898c): + 79 (16 receipt, 36 envelope, 22 describe, 5 mesh); the 11 new call vectors are skipped
+  assert.equal(applicable.length, 1024); // spec-0.6.1 (42979b5): + 122 (define 28, cell 24, uri 25, describe 19, envelope 9, receipt 7, class 5, function 4, jcs 1; the 17 formula and 3 formula-eval new vectors are skipped); spec-0.6.0 (941d9b5): + 5 envelope (whatif); spec-0.6.0 (640898c): + 79 (16 receipt, 36 envelope, 22 describe, 5 mesh); the 11 new call vectors are skipped
   const count = (k, valid) => vectors.filter((v) => v.kind === k && v.valid === valid).length;
   // SPEC 14 spec-0.4.1: the kind mesh, 3 valid and 17 invalid, and 10 more (2 valid) at 3f79313.
   assert.deepEqual([count('mesh', true), count('mesh', false)], [13, 34]); // spec-0.6.0: + 2 valid (whatif, whatif-required-only), 3 invalid; spec-0.4.2: + versions (1, 1); spec-0.4.3: + keydoc-declarations; spec-0.5.0: + 4 valid (3 unrooted loopback, describe endpoint), 5 invalid
@@ -26,9 +26,9 @@ test('the vector set is complete (1569 vectors at spec-0.6.0 941d9b5: 902 for ve
   // spec-0.5.0: licence has 3 invalid (grammar of the arguments, 8.5), entitlement 6 (R and its inputs, 10.3).
   assert.deepEqual([count('licence', true), count('licence', false), count('entitlement', true), count('entitlement', false)], [50, 3, 11, 6]);
   // SPEC 14 spec-0.5.0, the new kinds (SPEC 11): class (12, 33), normalisation (9, 15), key (7, 10), describe (6, 18), define (3, 4); counts as of c8896ad.
-  assert.deepEqual([count('class', true), count('class', false), count('normalisation', true), count('normalisation', false), count('key', true), count('key', false), count('describe', true), count('describe', false), count('define', true), count('define', false)], [12, 33, 9, 15, 7, 10, 12, 34, 3, 4]); // spec-0.6.0: describe + 6 valid, 16 invalid
+  assert.deepEqual([count('class', true), count('class', false), count('normalisation', true), count('normalisation', false), count('key', true), count('key', false), count('describe', true), count('describe', false), count('define', true), count('define', false)], [14, 36, 9, 15, 7, 10, 21, 44, 13, 22]); // spec-0.6.1: class + 2 valid, 3 invalid; describe + 9 valid, 10 invalid; define + 10 valid, 18 invalid; spec-0.6.0: describe + 6 valid, 16 invalid
   assert.deepEqual([count('call', true), count('call', false)], [28, 34]); // skipped kind; spec-0.6.0: + 8 valid, 3 invalid; 6 new invalid at c8896ad
-  assert.deepEqual([count('envelope', true), count('envelope', false)], [76, 133]); // spec-0.6.0 (941d9b5): + 3 valid, 2 invalid (whatif); spec-0.6.0: + 9 valid, 27 invalid; c8896ad: + 2 valid bad_request (key codes), 4 invalid
+  assert.deepEqual([count('envelope', true), count('envelope', false)], [81, 137]); // spec-0.6.1 (42979b5): + 5 valid, 4 invalid (test_case, DNS segments); spec-0.6.0 (941d9b5): + 3 valid, 2 invalid (whatif); spec-0.6.0: + 9 valid, 27 invalid; c8896ad: + 2 valid bad_request (key codes), 4 invalid
   assert.deepEqual([count('keys', true), count('keys', false)], [3, 28]); // unchanged at spec-0.5.0
   assert.equal(vectors.filter((v) => /foreign-unavailable/.test(v.id)).length, 7);
   for (const v of vectors.filter((x) => x.kind === 'keys' && x.valid)) assert.equal(v.declarations !== undefined, /declarations/.test(v.id), v.id);

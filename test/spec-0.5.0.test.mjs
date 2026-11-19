@@ -45,7 +45,7 @@ async function conforms(ids) {
   }
 }
 const idsWhere = (f) => all.filter(f).map((v) => v.id);
-const isNew060 = (v) => /^spec-0\.6\.0/.test(v.description ?? ''); // build2-part1: the new vectors are not part of the older blocks
+const isNew060 = (v) => /^spec-0\.6\.[01]/.test(v.description ?? ''); // build2-part1: the new vectors (0.6.0, 0.6.1) are not part of the older blocks
 
 /** Probes: the reference tool's verdict for each (item, vector); `success` means accepted. */
 const probes = gunzipSync(readFileSync(join(root, 'test', 'fixtures', 'oracle-probes-0.5.0.jsonl.gz'))).toString('utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -538,8 +538,8 @@ test('item 4: probes agree with the reference tool (key_normalisation, classes, 
 const classVectors = all.filter((v) => v.kind === 'class');
 const classEnv = (v, over = {}) => ({ ...v.env, ...over });
 
-test('item 5: the class vectors (12 valid, 33 invalid)', async () => {
-  assert.equal(classVectors.length, 45);
+test('item 5: the class vectors (14 valid, 36 invalid at spec-0.6.1; 12 and 33 at spec-0.5.0)', async () => {
+  assert.equal(classVectors.length, 50);
   await conforms(classVectors.map((v) => v.id));
 });
 
@@ -850,13 +850,13 @@ test('item 8: the describe vectors (6 valid, 18 invalid)', async () => {
 test('item 8: a class answer and an object answer pass; the result names the kind', () => {
   const c = byId['describe/class'];
   const o = byId['describe/object'];
-  assert.deepEqual(lib.checkDescribe(c.input, c.classes), { kind: 'class' });
+  assert.deepEqual(lib.checkDescribe(c.input, c.classes), { kind: 'class', publisher: null });
   assert.deepEqual(lib.checkDescribe(o.input, o.classes), { kind: 'object' });
   // text, bytes or a parsed object
-  assert.deepEqual(lib.checkDescribe(JSON.parse(c.input), c.classes), { kind: 'class' });
+  assert.deepEqual(lib.checkDescribe(JSON.parse(c.input), c.classes), { kind: 'class', publisher: null });
   assert.deepEqual(lib.checkDescribe(new TextEncoder().encode(o.input), o.classes), { kind: 'object' });
   // `classes` is what the caller holds, by name: an answer for a class the caller does not hold is checked on its own
-  assert.deepEqual(lib.checkDescribe(c.input, {}), { kind: 'class' });
+  assert.deepEqual(lib.checkDescribe(c.input, {}), { kind: 'class', publisher: null });
   assert.deepEqual(lib.checkDescribe(o.input, {}), { kind: 'object' });
   assert.throws(() => lib.checkDescribe(c.input, null), TypeError);
   assert.throws(() => lib.checkDescribe(c.input), TypeError);
@@ -1342,8 +1342,8 @@ test('re-pin 5: step 5 and 6, args and returns are checked only against the meth
   assert.equal(codeOf(() => lib.checkDescribe(badReturns.input, badReturns.classes, without(badReturns.functions))), 'OK');
   // the matching answer passes with every function held
   const good = byId['describe/class-functions'];
-  assert.deepEqual(lib.checkDescribe(good.input, good.classes, good.functions), { kind: 'class' });
-  assert.deepEqual(lib.checkDescribe(good.input, good.classes), { kind: 'class' });
+  assert.deepEqual(lib.checkDescribe(good.input, good.classes, good.functions), { kind: 'class', publisher: null });
+  assert.deepEqual(lib.checkDescribe(good.input, good.classes), { kind: 'class', publisher: null });
   // args: exactly the function's arguments after the class keys; any difference is E_DESCRIBE
   const a = JSON.parse(good.input);
   const edit = (m, f) => {

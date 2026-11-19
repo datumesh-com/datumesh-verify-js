@@ -23,7 +23,7 @@ export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.6.0';
+export const VERSION = '0.6.1';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);

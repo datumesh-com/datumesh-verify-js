@@ -18,6 +18,7 @@
 //     A checked scenario is { ok: true, kind: 'scenario', outcome: 'scenario', scenario: { cell, type, value, asof, overrides, solved }, receiptHash: null, trust: null, ... }:
 //     never a receipt (no receiptHash, no trust, kind 'scenario'). `solved` is { vary, value } or null.
 //   checkDescribe returns { kind: 'function', fn, fnHash, tests, source } for a function answer (tests and source null when absent).
+//   Since 0.6.1: checkDescribe's class and function results carry `publisher` (the answer's, or null).
 //   MESH_ENDPOINTS.whatif = { placeholders: [], required: false }; resolveMesh returns it in `endpoints`.
 //   Types exported: Scenario, ScenarioOverride, Cycle, CycleFix, SourceInfo.
 import { test } from 'node:test';
@@ -64,18 +65,18 @@ const ids = (kind, valid) => fresh.filter((v) => v.kind === kind && (valid === u
 // Versions, the submodule, the changelog
 // ------------------------------------------------------------------------------------------
 
-test('versions name spec-0.6.0 and 0.6.0 (both builds, package.json)', () => {
-  assert.equal(lib.SPEC_VERSION, 'spec-0.6.0');
-  assert.equal(cjs.SPEC_VERSION, 'spec-0.6.0');
-  assert.equal(lib.VERSION, '0.6.0');
-  assert.equal(cjs.VERSION, '0.6.0');
+test('versions name spec-0.6.1 and 0.6.1 (both builds, package.json)', () => {
+  assert.equal(lib.SPEC_VERSION, 'spec-0.6.1');
+  assert.equal(cjs.SPEC_VERSION, 'spec-0.6.1');
+  assert.equal(lib.VERSION, '0.6.1');
+  assert.equal(cjs.VERSION, '0.6.1');
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.6.0');
-  assert.equal(pkg.datumesh.spec, 'spec-0.6.0');
+  assert.equal(pkg.version, '0.6.1');
+  assert.equal(pkg.datumesh.spec, 'spec-0.6.1');
 });
 
-test('the spec submodule is at 941d9b5: 1569 vectors, 95 of them new (11 call, skipped)', () => {
-  assert.equal(all.length, 1569);
+test('the spec-0.6.0 vectors are all still there: 1569 of the 1711 (the 142 of spec-0.6.1 are not 0.6.0 vectors), 95 of them new (11 call, skipped)', () => {
+  assert.equal(all.filter((v) => !/^spec-0\.6\.1/.test(v.description)).length, 1569);
   assert.equal(fresh.length, 95);
   assert.equal(fresh.filter((v) => v.kind === 'call').length, 11);
   assert.equal(fresh.filter((v) => !SKIPPED_KINDS.includes(v.kind)).length, 84);
