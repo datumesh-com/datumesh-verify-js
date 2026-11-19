@@ -45,6 +45,7 @@ export const MESH_ENDPOINTS: Readonly<Record<string, { placeholders: readonly st
   slice: { placeholders: ['cell'], required: false },
   verify: { placeholders: [], required: false },
   versions: { placeholders: ['cell'], required: false }, // since spec-0.4.2 (9.8)
+  whatif: { placeholders: [], required: false }, // since spec-0.6.0 (9.6, 5.9): a read with overrides, a scenario
 };
 
 class MeshFail extends Error {

@@ -3,10 +3,27 @@ import { DatumeshError, type ErrorCode } from './errors.js';
 import { verifyEd25519Strict } from './ed25519.js';
 import { fromHex, sha256Hex } from './hash.js';
 import { has, newObject, sortedKeys, toJson, type JsonObject, type JsonValue } from './json.js';
-import { jcsBytes } from './jcs.js';
+import { jcsBytes, jcsText } from './jcs.js';
 import { collectSources, lookupKey, type Sources } from './keys.js';
 import { checkBlob, compareValues } from './lexical.js';
 import { isVersionSlice, receiptCanonicalAndConsistent, receiptStructure, returnType, validate } from './validate.js';
+
+/**
+ * Since spec-0.6.0 (8.1): a stored receipt's `source`, where its publisher says a relayed value was
+ * taken from. The signer's statement: verification does not fetch `url`.
+ */
+export interface SourceInfo {
+  /** The source's DNS name (not the host of cell.ns). */
+  name: string;
+  /** Where the value was taken from: an https:// URL. */
+  url: string;
+  /** When the publisher fetched the value: an instant, at or before the receipt's issued. */
+  retrieved: string;
+  /** The SHA-256 of the bytes fetched from url, when the publisher gave it. */
+  sha256?: string;
+  /** Where the source can take over publishing these cells, when given. */
+  takeover?: string;
+}
 
 export interface VerifyResult {
   /**
@@ -35,6 +52,8 @@ export interface VerifyResult {
   path: string | null;
   /** True only when blob content was supplied and step 7.7 ran and passed. Does not change `level`. */
   blobChecked: boolean;
+  /** Since spec-0.6.0: the receipt's `source` when ok and it has one (a copy), else null. */
+  source: SourceInfo | null;
 }
 
 /** Input for SPEC 10.1 step 7. The library does not evaluate functions; `value` is the result. */
@@ -415,11 +434,17 @@ export function verify(receipt: unknown, keys: unknown, recomputeArg?: Recompute
       detail: checked ? `${what}; blob content matches` : what,
       path: outcome === 'unavailable' ? '$.value' : outcome === 'superseded' ? '$.inputs' : null,
       blobChecked: checked,
+      source: sourceOf(r),
     };
   } catch (e) {
-    if (e instanceof Stop) return { ok: false, code: e.code, level: null, hash, key: null, detail: e.detail, path: e.path, blobChecked: false };
+    if (e instanceof Stop) return { ok: false, code: e.code, level: null, hash, key: null, detail: e.detail, path: e.path, blobChecked: false, source: null };
     throw e; // a bug in this library, not a property of the receipt
   }
+}
+
+/** The receipt's `source` as plain JSON (a copy: the caller may keep or change it), or null. */
+export function sourceOf(r: JsonObject): SourceInfo | null {
+  return r.source === undefined ? null : (JSON.parse(jcsText(r.source as JsonValue)) as SourceInfo);
 }
 
 /** Steps 1-6 for an already-parsed receipt (used by checkEnvelope). Throws a Stop. */

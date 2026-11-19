@@ -12,7 +12,7 @@ import { has, isObject, memberPath, newObject, sortedKeys, toJson, type JsonObje
 import { jcsBytes, jcsText } from './jcs.js';
 import { sha256Hex } from './hash.js';
 import { checkKeyNormalisation, isKeyRule } from './normalisation.js';
-import { LIMITS, URL_RE, checkArgName, checkDate, checkFunctionName, checkHex, checkInstant, checkName, checkNamespace, checkString, isDate, isInstant, isNumber, isTypeName, isHex, type TypeName } from './lexical.js';
+import { LIMITS, URL_RE, checkArgName, checkDate, checkDnsName, checkFunctionName, checkHex, checkInstant, checkName, checkNamespace, checkString, isDate, isInstant, isNumber, isTypeName, isHex, type TypeName } from './lexical.js';
 import { canonUnit, structUnit } from './units.js';
 import { validate } from './validate.js';
 import { isUnrooted } from './licence.js';
@@ -49,10 +49,30 @@ export interface TypedScalar {
   value: string | boolean;
 }
 
-/** What `checkDescribe` found: which of the two answer kinds (16.8) it checked. */
-export interface DescribeResult {
-  kind: 'class' | 'object';
+/** Since spec-0.6.0 (16.8): a method's or a function's `tests`, the mesh's statement of the tests it holds for the hash. */
+export interface DescribeTests {
+  branches: number;
+  count: number;
+  counterexamples: number;
+  covered: number;
 }
+
+/** Since spec-0.6.0 (16.8): a relayed function's `source`: the source's name, the mesh that relays it, and where it can take over. */
+export interface DescribeSource {
+  name: string;
+  relayed_by: string;
+  takeover: string;
+}
+
+/**
+ * What `checkDescribe` found: the answer's kind (16.8). A class and an object answer are checked
+ * as far as the held descriptors allow; since spec-0.6.0 a function answer (`kind` "function")
+ * carries its `fn`, `fnHash`, and its `tests` and `source` when it has them (else null).
+ */
+export type DescribeResult =
+  | { kind: 'class' }
+  | { kind: 'object' }
+  | { kind: 'function'; fn: string; fnHash: string; tests: DescribeTests | null; source: DescribeSource | null };
 
 // ---------------------------------------------------------------- helpers
 
@@ -720,22 +740,59 @@ function heldByHash(classes: { [name: string]: unknown }, hash: string): JsonObj
 export function checkDescribe(answer: unknown, classes: { [name: string]: unknown }, functions?: unknown[]): DescribeResult {
   if (!classes || typeof classes !== 'object') throw new TypeError('checkDescribe(answer, classes, functions): classes is an object');
   if (functions !== undefined && !Array.isArray(functions)) throw new TypeError('checkDescribe(answer, classes, functions): functions is an array');
-  const a = toJson(answer as JsonValue); // step 1: parse (6.1)
+  const numbers = new Map<string, string>();
+  const a = toJson(answer as JsonValue, numbers); // step 1: parse (6.1)
   try {
     if (!isObject(a)) fail('E_DESCRIBE', 'a describe answer is a JSON object', '$');
     if (a.kind === 'class') {
-      checkClassAnswer(a, functions ?? []);
+      checkClassAnswer(a, functions ?? [], numbers);
       return { kind: 'class' };
     }
     if (a.kind === 'object') {
       checkObjectAnswer(a, classes);
       return { kind: 'object' };
     }
-    fail('E_DESCRIBE', 'kind is class or object', '$.kind');
+    if (a.kind === 'function') return checkFunctionAnswer(a, functions ?? [], numbers);
+    fail('E_DESCRIBE', 'kind is class, object or function', '$.kind');
   } catch (e) {
     if (e instanceof DatumeshError && e.code !== 'E_DESCRIBE') fail('E_DESCRIBE', e.detail, e.path);
     throw e;
   }
+}
+
+/**
+ * Since spec-0.6.0 (16.8): `tests`, exactly branches, count, counterexamples and covered, four
+ * integers by 5.5's integer rule (`1.0` and `1e0` are not; the number text decides when there is
+ * one), with covered at most branches.
+ */
+function checkTests(t: JsonValue, numbers: Map<string, string>, path: string): DescribeTests {
+  if (!isObject(t)) fail('E_DESCRIBE', 'tests is an object', path);
+  hasExactly(t, ['branches', 'count', 'counterexamples', 'covered'], [], 'tests');
+  const int = (k: string): number => {
+    const v = t[k];
+    const text = numbers.get(memberPath(path, k));
+    const ok = typeof v === 'number' && (text !== undefined ? /^(0|[1-9][0-9]*)$/.test(text) : Number.isSafeInteger(v) && !Object.is(v, -0)) && v >= 0 && v <= Number.MAX_SAFE_INTEGER;
+    if (!ok) fail('E_DESCRIBE', `${k} is an integer (5.5)`, memberPath(path, k));
+    return v as number;
+  };
+  const branches = int('branches');
+  const count = int('count');
+  const counterexamples = int('counterexamples');
+  const covered = int('covered');
+  if (covered > branches) fail('E_DESCRIBE', 'covered is at most branches', path);
+  return { branches, count, counterexamples, covered };
+}
+
+/** Since spec-0.6.0 (16.8): `source` of a relayed function, exactly name, relayed_by and takeover, all required. */
+function checkSource(v: JsonValue, path: string): DescribeSource {
+  if (!isObject(v)) fail('E_DESCRIBE', 'source is an object', path);
+  hasExactly(v, ['name', 'relayed_by', 'takeover'], [], 'source');
+  for (const k of ['name', 'relayed_by', 'takeover']) if (typeof v[k] !== 'string') fail('E_DESCRIBE', `source.${k} is a string`, memberPath(path, k));
+  checkDnsName(v.name as string, memberPath(path, 'name'));
+  checkDnsName(v.relayed_by as string, memberPath(path, 'relayed_by'));
+  const t = v.takeover as string;
+  if (!URL_RE.test(t) || t.length > LIMITS.licence_url) fail('E_DESCRIBE', 'takeover is an https:// URL of at most 512 characters', memberPath(path, 'takeover'));
+  return { name: v.name as string, relayed_by: v.relayed_by as string, takeover: t };
 }
 
 /** Step 2 for a description: a string of 1 to 1024 bytes valid by 3.5. */
@@ -755,7 +812,27 @@ function checkMethodSignature(fn: JsonObject, desc: JsonObject, e: JsonObject, p
   if (jcsOf(sig.returns as JsonValue) !== jcsOf(e.returns as JsonValue)) fail('E_DESCRIBE', "returns is the method function's return", `${path}.returns`);
 }
 
-function checkClassAnswer(a: JsonObject, functions: unknown[]): void {
+/** Since spec-0.6.0 (16.8): a function answer, checked against the held descriptor of its fn_hash, when held. */
+function checkFunctionAnswer(a: JsonObject, functions: unknown[], numbers: Map<string, string>): DescribeResult {
+  hasExactly(a, ['kind', 'fn', 'fn_hash', 'args', 'returns'], ['description', 'tests', 'source'], 'a function answer');
+  if (typeof a.fn !== 'string') fail('E_DESCRIBE', 'fn is a function name', '$.fn');
+  checkFunctionName(a.fn, '$.fn');
+  if (!isLowerHex64(a.fn_hash)) fail('E_DESCRIBE', 'fn_hash is 64 lowercase hex digits', '$.fn_hash');
+  if (!isObject(a.args)) fail('E_DESCRIBE', 'args is an object', '$.args');
+  if (has(a, 'description')) checkDescription(a.description, '$.description');
+  const tests = has(a, 'tests') ? checkTests(a.tests as JsonValue, numbers, '$.tests') : null;
+  const source = has(a, 'source') ? checkSource(a.source as JsonValue, '$.source') : null;
+  // Step 6: against the descriptor held for fn_hash (by its hash); its arguments all, and its return.
+  const fn = indexFunctions(functions).get(a.fn_hash as string);
+  if (fn) {
+    const sig = fn.signature as JsonObject;
+    if (jcsOf(a.args as JsonObject) !== jcsOf(sig.args as JsonObject)) fail('E_DESCRIBE', "args are the function's arguments, all of them", '$.args');
+    if (jcsOf(a.returns as JsonValue) !== jcsOf(sig.returns as JsonValue)) fail('E_DESCRIBE', "returns is the function's return", '$.returns');
+  }
+  return { kind: 'function', fn: a.fn as string, fnHash: a.fn_hash as string, tests, source };
+}
+
+function checkClassAnswer(a: JsonObject, functions: unknown[], numbers: Map<string, string>): void {
   hasExactly(a, ['kind', 'class', 'class_hash', 'descriptor', 'methods'], [], 'a class answer');
   if (typeof a.class !== 'string') fail('E_DESCRIBE', 'class is a name', '$.class');
   checkFunctionName(a.class, '$.class');
@@ -773,11 +850,13 @@ function checkClassAnswer(a: JsonObject, functions: unknown[]): void {
     const e = table[m];
     const path = `$.methods.${m}`;
     if (!isObject(e)) fail('E_DESCRIBE', 'a method entry is an object', path);
-    hasExactly(e, ['fn', 'fn_hash', 'args', 'returns'], ['description'], `method ${m}`);
+    hasExactly(e, ['fn', 'fn_hash', 'args', 'returns'], ['description', 'tests', 'source'], `method ${m}`);
     if (e.fn !== `${a.class as string}/${m}`) fail('E_DESCRIBE', 'fn is the class name and the method name', `${path}.fn`);
     if (e.fn_hash !== dm[m]) fail('E_DESCRIBE', "fn_hash is the descriptor's hash for the method", `${path}.fn_hash`);
     if (!isObject(e.args)) fail('E_DESCRIBE', 'args is an object', `${path}.args`);
     if (has(e, 'description')) checkDescription(e.description, `${path}.description`);
+    if (has(e, 'tests')) checkTests(e.tests as JsonValue, numbers, `${path}.tests`);
+    if (has(e, 'source')) checkSource(e.source as JsonValue, `${path}.source`);
     const fn = held.get(dm[m] as string);
     if (fn) checkMethodSignature(fn, desc, e, path);
   }

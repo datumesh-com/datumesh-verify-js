@@ -11,7 +11,61 @@ import { isCurrency } from './units.js';
 import { Stop, memberOf, verifyEmbedded } from './verify.js';
 import { isVersionSlice, validate } from './validate.js';
 
-export type Outcome = 'ok' | 'stale' | 'not_covered' | 'unlicensed' | 'payment_required' | 'rate_limited' | 'error' | 'bad_request' | 'pending';
+/** Since spec-0.6.0 `scenario`: the answer to a whatif request (5.9). */
+export type Outcome = 'ok' | 'stale' | 'not_covered' | 'unlicensed' | 'payment_required' | 'rate_limited' | 'error' | 'bad_request' | 'pending' | 'scenario';
+
+/** A typed scalar (4.1) as the wire carries it: a string, or a boolean for a boolean value. */
+export interface TypedValue {
+  type: string;
+  value: string | boolean;
+}
+
+/** A cell (4.4) as an override or a scenario names it. */
+export interface ScenarioCell {
+  args: Record<string, TypedValue>;
+  fn: string;
+  fn_hash: string;
+  ns: string;
+}
+
+/** Since spec-0.6.0 (5.9): a value override, a cell's value replaced for the read. */
+export interface ScenarioValueOverride {
+  cell: ScenarioCell;
+  value: TypedValue;
+}
+
+/** Since spec-0.6.0 (5.9): a slice override, members of a stored slice added and removed (sorted by id). */
+export interface ScenarioSliceOverride {
+  slice: Record<string, unknown>;
+  add: { cell: ScenarioCell; value: TypedValue }[];
+  remove: ScenarioCell[];
+}
+
+export type ScenarioOverride = ScenarioValueOverride | ScenarioSliceOverride;
+
+/**
+ * Since spec-0.6.0 (5.9): a checked scenario, the value a cell would have under the request's
+ * overrides. It is never a fact: not signed, stored or served as the cell's value, so it has no
+ * receipt and no trust. `value` is the lexical form of `type` (a boolean value is `true` or
+ * `false`); `solved` is the value found by `solve`, present exactly when the request had one.
+ */
+export interface Scenario {
+  cell: ScenarioCell;
+  type: string;
+  value: string;
+  asof: string;
+  overrides: ScenarioOverride[];
+  solved: { vary: ScenarioCell; value: TypedValue } | null;
+}
+
+/** Since spec-0.6.0 (C6, 5.5): the fixes a cycle admits, in this order. */
+export type CycleFix = 'asof' | 'lag' | 'step' | 'solver';
+
+/** Since spec-0.6.0 (C6, 15.12): a cycle on an `error` envelope (E_EVAL_UNAVAILABLE): its path of calls and its fixes. */
+export interface Cycle {
+  path: string[];
+  fixes: CycleFix[];
+}
 
 /**
  * What the client asked for (SPEC 5.5 step 5): the requested cell's id, and `asof` if the request
@@ -24,6 +78,14 @@ export interface EnvelopeRequest {
   cell_id: string;
   asof?: string;
   job?: string;
+  /**
+   * Since spec-0.6.0 (5.9): the overrides of a whatif request, the canonical array (a value
+   * override or a slice override each), at most 64; present for a whatif request, possibly empty
+   * when `solve` is given. Malformed: a TypeError (the caller's error).
+   */
+  overrides?: ScenarioOverride[];
+  /** Since spec-0.6.0 (5.9): the vary cell's id (64 lowercase hex digits) of a whatif request with `solve`. */
+  solve?: string;
   /** Since spec-0.4.2: the pin, when the request was pinned (`fn_hash=`, 5.1); the answer must echo it. */
   fn_hash?: string;
   /**
@@ -43,12 +105,13 @@ export interface Pending {
   /** The mesh's estimate of the seconds until the result is ready; a hint. */
   estimateSeconds: number;
 }
-/** `computed` since spec-0.4.2: the mesh asked evaluated and signed the cell itself (5.5). */
-export type Trust = 'primary' | 'computed' | 'verified' | 'unverified';
+/** `computed` since spec-0.4.2: the mesh asked evaluated and signed the cell itself (5.5). `relayed` since spec-0.6.0: the publisher signed a value taken from another party (a receipt with `source`). */
+export type Trust = 'primary' | 'computed' | 'verified' | 'unverified' | 'relayed';
 
 /** SPEC 5.5, 15.11 (since spec-0.4.0): the formula evaluation faults a `not_covered` envelope may carry. */
-export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE' | 'E_FORMULA_KEY' | 'E_FORMULA_DISPATCH_KEY';
-export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_DISPATCH_KEY'];
+/** Since spec-0.6.0, E_WHATIF_NO_SOLUTION is a request fault (5.9): a whatif `solve` found no value, not a formula fault. */
+export type Fault = 'E_FORMULA_DIV_ZERO' | 'E_FORMULA_DOMAIN' | 'E_FORMULA_RANGE' | 'E_FORMULA_EMPTY' | 'E_FORMULA_ABSENT' | 'E_FORMULA_FUTURE' | 'E_FORMULA_KEY' | 'E_FORMULA_DISPATCH_KEY' | 'E_WHATIF_NO_SOLUTION';
+export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_RANGE', 'E_FORMULA_EMPTY', 'E_FORMULA_ABSENT', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_DISPATCH_KEY', 'E_WHATIF_NO_SOLUTION'];
 
 /**
  * Since spec-0.4.3: what failed in reaching a foreign mesh, the `detail` of an `error` envelope
@@ -57,17 +120,10 @@ export const FAULTS: readonly Fault[] = ['E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN
 export type ForeignDetail = 'offline' | 'network' | 'dns' | 'tls' | 'timeout' | 'refused';
 export const FOREIGN_DETAILS: readonly ForeignDetail[] = ['offline', 'network', 'dns', 'tls', 'timeout', 'refused'];
 
-export interface EnvelopeResult {
-  /** True when the envelope is well formed, matches the status, and its receipt (if any) is signature-valid. */
-  ok: boolean;
+/** The members every envelope result has (SPEC 5.5). */
+interface EnvelopeCommon {
   /** "OK", E_ENVELOPE, a parse code, or the code of the embedded receipt's verification. */
   code: 'OK' | ErrorCode;
-  /** The envelope's outcome when ok, else null. */
-  outcome: Outcome | null;
-  /** The trust label when ok and the envelope carries a receipt, else null. */
-  trust: Trust | null;
-  /** The embedded receipt's hash once it has been verified (SPEC 10.1 steps 1-6), else null. */
-  receiptHash: string | null;
   /** Human-readable explanation. */
   detail: string;
   /** Where the failure was found (a JSON path such as `$.quote.amount`), or null. */
@@ -87,19 +143,61 @@ export interface EnvelopeResult {
    * belongs to another mesh, which could not be reached; HTTP 502), its `detail`; else null.
    */
   foreignDetail: ForeignDetail | null;
-  /**
-   * Since spec-0.5.0: the `resolved` member when ok and present (5.5, 16.7): what a short call
-   * resolved, as the mesh says it; else null.
-   */
+  /** Since spec-0.5.0: the `resolved` member when ok and present (5.5, 16.7): what a short call resolved, as the mesh says it; else null. */
   resolved: Resolved | null;
   /** Since spec-0.5.0: the `shadows` member when ok and present (5.5, 16.9); else null. */
   shadows: Shadows | null;
-  /**
-   * Since spec-0.5.0: the `error` member when ok and the outcome carries one (not_covered,
-   * bad_request, error); else null.
-   */
+  /** Since spec-0.5.0: the `error` member when ok and the outcome carries one (not_covered, bad_request, error); else null. */
   error: ErrorCode | null;
+  /** Since spec-0.6.0 (5.5, 15.12): the `cycle` of an `error` envelope when ok and present, else null. */
+  cycle: Cycle | null;
 }
+
+/**
+ * A checked envelope with a receipt (SPEC 5.5, outcomes `ok` and `stale`): the receipt verified
+ * through step 6, with its trust, and `kind` `receipt`.
+ */
+export interface ReceiptEnvelope extends EnvelopeCommon {
+  ok: true;
+  kind: 'receipt';
+  outcome: 'ok' | 'stale';
+  /** The trust label, checked against the receipt (5.5 step 6). */
+  trust: Trust;
+  /** The embedded receipt's hash (SPEC 8.3), verified through step 6. */
+  receiptHash: string;
+  scenario: null;
+}
+
+/**
+ * Since spec-0.6.0 (5.9): a checked scenario. It is its own result kind, never a receipt: it has
+ * no receipt hash and no trust, and nothing a verifier holds can make it one.
+ */
+export interface ScenarioEnvelope extends EnvelopeCommon {
+  ok: true;
+  kind: 'scenario';
+  outcome: 'scenario';
+  trust: null;
+  receiptHash: null;
+  scenario: Scenario;
+}
+
+/**
+ * Every other result: an envelope without a receipt (not_covered, unlicensed, payment_required,
+ * rate_limited, error, bad_request, pending), or a failed check (`ok` false), whose `receiptHash`
+ * is the hash of an embedded receipt that verified through step 6, else null. `kind` is null.
+ */
+export interface OtherEnvelope extends EnvelopeCommon {
+  ok: boolean;
+  kind: null;
+  /** The envelope's outcome when ok, else null. */
+  outcome: Outcome | null;
+  trust: null;
+  receiptHash: string | null;
+  scenario: null;
+}
+
+/** The result of checkEnvelope: a receipt, a scenario, or any other checked envelope (or a failure). */
+export type EnvelopeResult = ReceiptEnvelope | ScenarioEnvelope | OtherEnvelope;
 
 /** Since spec-0.5.0 (5.5): a resolution of a short call (16.7). `lookup` carries its `asof`. */
 export interface Resolution {
@@ -130,9 +228,10 @@ const MEMBERS: Record<Outcome, { required: string[]; optional: string[] }> = {
   unlicensed: { required: [], optional: ['fn_hash', 'resolved', 'shadows'] },
   payment_required: { required: ['quote'], optional: ['fn_hash', 'resolved', 'shadows'] },
   rate_limited: { required: ['retry_after_seconds'], optional: ['fn_hash'] },
-  error: { required: ['error'], optional: ['detail', 'fn_hash', 'resolved', 'shadows'] }, // detail since spec-0.4.3
+  error: { required: ['error'], optional: ['cycle', 'detail', 'fn_hash', 'resolved', 'shadows'] }, // detail since spec-0.4.3; cycle since spec-0.6.0
   bad_request: { required: ['error'], optional: ['fn_hash'] },
   pending: { required: ['estimate_seconds', 'job', 'poll', 'request'], optional: [] },
+  scenario: { required: ['scenario'], optional: ['fn_hash', 'resolved'] }, // since spec-0.6.0 (5.9)
 };
 const STATUS: Record<Outcome, (s: number) => boolean> = {
   ok: (s) => s === 200,
@@ -144,18 +243,20 @@ const STATUS: Record<Outcome, (s: number) => boolean> = {
   error: (s) => s >= 500 && s <= 599,
   bad_request: (s) => s === 400,
   pending: (s) => s === 202,
+  scenario: (s) => s === 200,
 };
 /** SPEC 5.5: the codes `parse` can raise (5.4), the only ones a bad_request carries. */
 const PARSE_CODES: readonly string[] = ['E_PARSE_URI', 'E_CANON_NAME', 'E_CANON_ARG_NAME', 'E_CANON_ARG_DUPLICATE', 'E_CANON_ARG_ORDER', 'E_CANON_PERCENT', 'E_CANON_TYPE', 'E_CANON_NUMBER', 'E_CANON_DATE', 'E_CANON_INSTANT', 'E_CANON_STRING', 'E_CANON_BLOB', 'E_CANON_LIMIT', 'E_ARG_UNKNOWN', 'E_ARG_MISSING'];
 /** Since spec-0.4.2 a bad_request also carries E_CANON_HEX (a pin) and E_SLICE_AT_CELL; E_JOB_UNKNOWN only at a job URL. Since spec-0.5.0, E_SHORT_ID_AMBIGUOUS (16.8) and a call's E_KEY_NORMALISATION and E_KEY_ENCODING (5.5, 5.8). */
-const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING'];
-/** SPEC 5.5, 10.2 (since spec-0.5.0): the 18 codes no error envelope carries: the client's E_ENVELOPE and E_DESCRIBE, the request codes, the key codes, the define and write codes and the eight class codes. */
-const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_DESCRIBE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER'];
+const BAD_REQUEST_CODES: readonly string[] = [...PARSE_CODES, 'E_CANON_HEX', 'E_SLICE_AT_CELL', 'E_JOB_UNKNOWN', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_WHATIF_UNSUPPORTED', 'E_SLICE_MEMBER'];
+
+/** SPEC 5.5, 10.2 (since spec-0.5.0): the codes no error envelope carries: the client's E_ENVELOPE and E_DESCRIBE, the request codes, the key codes, the define and write codes and the eight class codes; since spec-0.6.0 E_WHATIF_UNSUPPORTED, a bad_request code. */
+const NOT_ERROR_CODES: readonly string[] = ['E_ENVELOPE', 'E_DESCRIBE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_WHATIF_UNSUPPORTED', 'E_WHATIF_NO_SOLUTION'];
 /** SPEC 5.5 (since spec-0.5.0): the codes a not_covered envelope carries in `error`. */
 const NOT_COVERED_CODES: readonly string[] = ['E_NAME_UNBOUND', 'E_NAMESPACE_SUSPENDED'];
 /** SPEC 5.5 (since spec-0.5.0): the arguments of `resolved` resolutions. */
 const RESOLUTION_KINDS: readonly string[] = ['alias', 'default', 'method', 'lookup'];
-const TRUST: readonly string[] = ['primary', 'computed', 'verified', 'unverified'];
+const TRUST: readonly string[] = ['primary', 'computed', 'verified', 'unverified', 'relayed'];
 const HEX64 = /^[0-9a-f]{64}$/;
 const JOB_RE = /^[0-9a-f]{32,64}$/;
 const HTTP_URL_RE = /^http:\/\/[!-~]+$/;
@@ -300,11 +401,101 @@ function members(o: JsonValue, numbers: Map<string, string>): Outcome {
         if (typeof v !== 'string' || !isHex(v, 64)) bad('superseded_by is a receipt hash: 64 lowercase hex digits', p);
         break;
       case 'trust':
-        if (typeof v !== 'string' || !TRUST.includes(v)) bad('trust is one of primary, computed, verified, unverified', p);
+        if (typeof v !== 'string' || !TRUST.includes(v)) bad('trust is one of primary, computed, verified, unverified, relayed', p);
+        break;
+      case 'cycle':
+        // Since spec-0.6.0 (C6, 5.5): only with E_EVAL_UNAVAILABLE (the cycle is evaluation's failure).
+        if (o.error !== 'E_EVAL_UNAVAILABLE') bad('cycle is carried by an error envelope with E_EVAL_UNAVAILABLE only', p);
+        cycleMember(v, p);
+        break;
+      case 'scenario':
+        scenarioMember(v, p);
         break;
     }
   }
   return outcome;
+}
+
+/** SPEC 15.12 (since spec-0.6.0): `cycle`, exactly path and fixes, with the rules of 5.5. */
+function cycleMember(v: JsonValue, path: string): void {
+  if (!isObject(v)) bad('cycle is an object {path, fixes}', path);
+  for (const k of ['fixes', 'path']) if (!has(v, k)) bad(`cycle has no ${k}`, path);
+  for (const k of sortedKeys(v)) if (k !== 'fixes' && k !== 'path') bad(`cycle has an unexpected member ${JSON.stringify(k)}`, memberPath(path, k));
+  const path_ = v.path;
+  const pp = memberPath(path, 'path');
+  if (!Array.isArray(path_) || path_.length < 2 || path_.some((c) => typeof c !== 'string' || c === '')) bad('cycle.path is an array of at least two non-empty call strings', pp);
+  const calls = path_ as string[];
+  if (calls[0] !== calls[calls.length - 1]) bad('cycle.path starts and ends with the same call (the cell that reappeared)', pp);
+  const fixes = v.fixes;
+  const fp = memberPath(path, 'fixes');
+  if (!Array.isArray(fixes) || fixes.length === 0) bad('cycle.fixes is a non-empty array', fp);
+  const order = ['asof', 'lag', 'step', 'solver'];
+  let last = -1;
+  for (const f of fixes as JsonValue[]) {
+    const i = typeof f === 'string' ? order.indexOf(f) : -1;
+    if (i < 0) bad('cycle.fixes holds only asof, lag, step and solver', fp);
+    if (i <= last) bad('cycle.fixes is distinct and in the order asof, lag, step, solver', fp);
+    last = i;
+  }
+}
+
+/** SPEC 5.9 (since spec-0.6.0): the members of a scenario, its cell, its value and its overrides checked by their rules. */
+function scenarioMember(v: JsonValue, path: string): void {
+  if (!isObject(v)) bad('scenario is an object', path);
+  const required = ['asof', 'cell', 'overrides', 'type', 'value'];
+  for (const k of required) if (!has(v, k)) bad(`scenario has no ${k}`, path);
+  for (const k of sortedKeys(v)) if (!required.includes(k) && k !== 'solved') bad(`scenario has an unexpected member ${JSON.stringify(k)}`, memberPath(path, k));
+  if (typeof v.asof !== 'string' || !isInstant(v.asof)) bad('scenario.asof is an instant', memberPath(path, 'asof'));
+  inner(() => validate(v.cell as JsonValue, 'cell', memberPath(path, 'cell')), memberPath(path, 'cell'));
+  inner(() => validate({ type: v.type, value: v.value } as JsonObject, 'scalar', memberPath(path, 'value')), memberPath(path, 'value'));
+  const problem = overrideProblem(v.overrides as JsonValue);
+  if (problem !== null) bad(problem, memberPath(path, 'overrides'));
+  if (has(v, 'solved')) {
+    const sv = v.solved;
+    const sp = memberPath(path, 'solved');
+    if (!isObject(sv) || sortedKeys(sv).join() !== 'value,vary') bad('scenario.solved is {value, vary}', sp);
+    inner(() => validate(sv.vary as JsonValue, 'cell', memberPath(sp, 'vary')), memberPath(sp, 'vary'));
+    inner(() => validate(sv.value as JsonValue, 'scalar', memberPath(sp, 'value')), memberPath(sp, 'value'));
+    if ((sv.value as JsonObject).type !== 'number') bad('scenario.solved.value is a number', memberPath(sp, 'value'));
+  }
+}
+
+/**
+ * SPEC 5.9 (since spec-0.6.0): the overrides array of a whatif request, checked by the rules of
+ * its members: at most 64; a value override {cell, value}, or a slice override {slice, add, remove}
+ * with each added member {cell, value} and each removed cell. Returns the problem, or null.
+ */
+function overrideProblem(v: JsonValue): string | null {
+  if (!Array.isArray(v)) return 'overrides is an array of overrides';
+  if (v.length > 64) return 'overrides holds at most 64 overrides';
+  for (let i = 0; i < v.length; i++) {
+    const o = v[i];
+    const p = `$.overrides[${i}]`;
+    if (!isObject(o)) return `${p} is an override object`;
+    const names = sortedKeys(o).join();
+    try {
+      if (names === 'cell,value') {
+        validate(o.cell as JsonValue, 'cell', `${p}.cell`);
+        validate(o.value as JsonValue, 'scalar', `${p}.value`);
+      } else if (names === 'add,remove,slice') {
+        validate(o.slice as JsonValue, 'slice', `${p}.slice`);
+        if (!Array.isArray(o.add)) return `${p}.add is an array`;
+        for (const a of o.add as JsonValue[]) {
+          if (!isObject(a) || sortedKeys(a).join() !== 'cell,value') return `${p}.add holds {cell, value} members`;
+          validate(a.cell as JsonValue, 'cell', `${p}.add.cell`);
+          validate(a.value as JsonValue, 'scalar', `${p}.add.value`);
+        }
+        if (!Array.isArray(o.remove)) return `${p}.remove is an array`;
+        for (const c of o.remove as JsonValue[]) validate(c, 'cell', `${p}.remove`);
+      } else {
+        return `${p} is a value override {cell, value} or a slice override {slice, add, remove}`;
+      }
+    } catch (e) {
+      if (e instanceof DatumeshError) return `${p}: ${e.code}: ${e.detail}`;
+      throw e;
+    }
+  }
+  return null;
 }
 
 const isDnsName = (s: string): boolean => {
@@ -351,11 +542,12 @@ function shadowsMember(v: JsonValue, path: string): void {
 const plain = <T>(v: JsonValue): T => JSON.parse(jcsText(v)) as T;
 
 /** The members the result exposes (5.5, since spec-0.5.0): resolved, shadows and the error of the outcome. */
-function exposed(env: JsonObject, outcome: Outcome): Pick<EnvelopeResult, 'resolved' | 'shadows' | 'error'> {
+function exposed(env: JsonObject, outcome: Outcome): Pick<EnvelopeCommon, 'resolved' | 'shadows' | 'error' | 'cycle'> {
   return {
     resolved: has(env, 'resolved') ? plain<Resolved>(env.resolved as JsonValue) : null,
     shadows: has(env, 'shadows') ? plain<Shadows>(env.shadows as JsonValue) : null,
     error: (outcome === 'not_covered' || outcome === 'bad_request' || outcome === 'error') && has(env, 'error') ? (env.error as ErrorCode) : null,
+    cycle: has(env, 'cycle') ? plain<Cycle>(env.cycle as JsonValue) : null,
   };
 }
 
@@ -379,19 +571,49 @@ function checkCommon(request: JsonObject): boolean {
   );
 }
 
-function checkRequest(request: unknown): void {
+/**
+ * Check a cell request description (SPEC 5.5, 5.9) and return it as checked: its overrides, when
+ * it has them, in their canonical form (the echo a scenario is compared with). Malformed: a TypeError.
+ */
+function checkRequest(request: unknown): Req {
   const ok =
     isObject(request) &&
     typeof request.cell_id === 'string' &&
     isHex(request.cell_id, 64) &&
-    Object.keys(request).every((k) => ['cell_id', 'asof', 'job', 'fn_hash', 'mesh'].includes(k)) &&
+    Object.keys(request).every((k) => ['cell_id', 'asof', 'job', 'fn_hash', 'mesh', 'overrides', 'solve'].includes(k)) &&
     checkCommon(request) &&
-    (!has(request, 'job') || (typeof request.job === 'string' && JOB_RE.test(request.job)));
+    (!has(request, 'job') || (typeof request.job === 'string' && JOB_RE.test(request.job))) &&
+    (!has(request, 'solve') || (typeof request.solve === 'string' && HEX64.test(request.solve)));
+  const badOverrides = 'overrides is an array of at most 64 overrides, each a value override {cell, value} or a slice override {slice, add, remove}, sorted by cell or slice id with none repeated, and non-empty unless solve is given (SPEC 5.9)';
+  let overrides: JsonValue[] | undefined;
+  if (ok && has(request, 'solve') && !has(request, 'overrides')) throw new TypeError('solve is a member of a whatif request, which has overrides (SPEC 5.9)');
+  if (ok && has(request, 'overrides')) {
+    if (!Array.isArray(request.overrides)) throw new TypeError(badOverrides);
+    let parsed: JsonValue;
+    try {
+      parsed = toJson(JSON.stringify(request.overrides));
+    } catch {
+      throw new TypeError(badOverrides);
+    }
+    if (overrideProblem(parsed) !== null) throw new TypeError(badOverrides);
+    const list = parsed as JsonObject[];
+    if (list.length === 0 && !has(request, 'solve')) throw new TypeError(badOverrides);
+    // Sorted by cell or slice id, strictly (so none is repeated).
+    const ids = list.map((o) => sha256Hex(jcsBytes((has(o, 'slice') ? o.slice : o.cell) as JsonValue)));
+    for (let i = 1; i < ids.length; i++) if (!(ids[i - 1] < ids[i])) throw new TypeError(badOverrides);
+    overrides = list;
+  }
   if (!ok) {
     throw new TypeError(
-      'request must be {cell_id: <64 lowercase hex>, asof?: <instant>, job?: <32-64 lowercase hex>, fn_hash?: <64 lowercase hex>, mesh?: <DNS name>}: the cell id of the original request (resolved to the fn_hash used), its asof if it had one, the job polled when the body answers a job URL, the pin when it was pinned, and the host asked',
+      'request must be {cell_id: <64 lowercase hex>, asof?: <instant>, job?: <32-64 lowercase hex>, fn_hash?: <64 lowercase hex>, mesh?: <DNS name>, overrides?: <canonical override array>, solve?: <64 lowercase hex>}: the cell id of the original request (resolved to the fn_hash used), its asof if it had one, the job polled when the body answers a job URL, the pin when it was pinned, the host asked, and the overrides and vary cell of a whatif request (SPEC 5.5, 5.9)',
     );
   }
+  const r: Req = { ...(request as Req) };
+  if (overrides !== undefined) {
+    r.overrides = overrides;
+    r.overridesText = jcsText(overrides as unknown as JsonValue);
+  }
+  return r;
 }
 
 /** A slice request description (SPEC 5.6): `{slice_id, asof?, fn_hash?, mesh?, after?}`. */
@@ -427,8 +649,12 @@ function subNumbers(numbers: Map<string, string>, prefix: string): Map<string, s
 
 const atPath = (prefix: string, p: string | null) => (p === null ? prefix : p.replace(/^\$/, prefix));
 
-type Req = { cell_id?: string; asof?: string; job?: string; fn_hash?: string; mesh?: string };
-const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, code, outcome: null, trust: null, receiptHash, detail, path, fault: null, pending: null, fnHash: null, foreignDetail: null, resolved: null, shadows: null, error: null });
+/**
+ * The request as checked (SPEC 5.5, 5.9): its members, and since spec-0.6.0 the overrides in
+ * their canonical text, which the scenario's echo is compared with, and `solve`.
+ */
+type Req = { cell_id?: string; asof?: string; job?: string; fn_hash?: string; mesh?: string; overrides?: JsonValue[]; overridesText?: string; solve?: string };
+const failed = (code: ErrorCode, detail: string, path: string | null, receiptHash: string | null = null): EnvelopeResult => ({ ok: false, kind: null, code, outcome: null, trust: null, receiptHash, scenario: null, detail, path, fault: null, pending: null, fnHash: null, foreignDetail: null, resolved: null, shadows: null, error: null, cycle: null });
 
 /**
  * SPEC 5.5 step 6 for a verified receipt: `primary` exactly when its condition holds; with the
@@ -438,12 +664,49 @@ const failed = (code: ErrorCode, detail: string, path: string | null, receiptHas
 function trustProblem(trust: Trust, receipt: JsonObject, mesh: string | undefined): string | null {
   const cell = receipt.cell as JsonObject;
   const signer = hostOf(receipt.computed_by as string, '#');
-  const primary = signer === hostOf(cell.ns as string, '/') && (receipt.inputs as string[]).length === 0;
-  if ((trust === 'primary') !== primary) return primary ? 'the receipt is primary (signed by its namespace host, no inputs): trust must be primary' : 'trust primary needs a receipt signed by the host of cell.ns with no inputs';
-  if (!primary && mesh !== undefined && (trust === 'computed') !== (signer === mesh)) {
+  // Since spec-0.6.0 (5.5): both primary and relayed need no inputs and the signer the host of
+  // cell.ns; primary has no source, relayed has one. Neither depends on the mesh asked.
+  const own = signer === hostOf(cell.ns as string, '/') && (receipt.inputs as string[]).length === 0;
+  const primary = own && !has(receipt, 'source');
+  const relayed = own && has(receipt, 'source');
+  if ((trust === 'primary') !== primary) return primary ? 'the receipt is primary (signed by its namespace host, no inputs, no source): trust must be primary' : 'trust primary needs a receipt signed by the host of cell.ns with no inputs and no source (one with a source is trust relayed)';
+  if ((trust === 'relayed') !== relayed) return relayed ? 'the receipt is relayed (signed by its namespace host, no inputs, with a source): trust must be relayed' : 'trust relayed needs a receipt signed by the host of cell.ns with no inputs and a source';
+  if (!primary && !relayed && mesh !== undefined && (trust === 'computed') !== (signer === mesh)) {
     return trust === 'computed' ? `trust computed needs a receipt signed by the mesh asked (${mesh}), not ${signer}` : `the mesh asked (${mesh}) signed this receipt: its trust is computed, not ${trust}`;
   }
   return null;
+}
+
+/**
+ * SPEC 5.9 step 5 (since spec-0.6.0): a scenario is bound to the request. Its cell has the
+ * requested cell id; its asof is the requested one when one was sent; its overrides are the
+ * request's, byte for byte in canonical JSON; `solved` is present exactly when `solve` was sent,
+ * and its vary has the requested id. Every failure is E_ENVELOPE.
+ */
+function scenarioResult(env: JsonObject, request: Req, echo: string | null): EnvelopeResult {
+  const s = env.scenario as JsonObject;
+  const fail = (detail: string, path: string) => failed('E_ENVELOPE', detail, path);
+  if (sha256Hex(jcsBytes(s.cell as JsonValue)) !== request.cell_id) return fail(`the scenario is for another cell than the requested ${String(request.cell_id)}`, '$.scenario.cell');
+  if (request.asof !== undefined && s.asof !== request.asof) return fail('the scenario is as of another asof than the one requested', '$.scenario.asof');
+  if (jcsText(s.overrides as JsonValue) !== request.overridesText) return fail("the scenario's overrides are not the request's overrides, in canonical form", '$.scenario.overrides');
+  if (request.solve !== undefined) {
+    const solved = s.solved as JsonObject | undefined;
+    if (solved === undefined) return fail('solve was requested: the scenario states the value found (solved)', '$.scenario');
+    if (sha256Hex(jcsBytes(solved.vary as JsonValue)) !== request.solve) return fail("solved's vary is not the requested vary cell", '$.scenario.solved.vary');
+  } else if (has(s, 'solved')) {
+    return fail('solved is present only when the request had solve', '$.scenario.solved');
+  }
+  // The scenario's value as its lexical form: a boolean is true or false (3.x).
+  const value = String(s.value);
+  const scenario: Scenario = {
+    cell: plain<ScenarioCell>(s.cell as JsonValue),
+    type: s.type as string,
+    value,
+    asof: s.asof as string,
+    overrides: plain<ScenarioOverride[]>(s.overrides as JsonValue),
+    solved: has(s, 'solved') ? plain<{ vary: ScenarioCell; value: TypedValue }>(s.solved as JsonValue) : null,
+  };
+  return { ok: true, kind: 'scenario', code: 'OK', outcome: 'scenario', trust: null, receiptHash: null, scenario, detail: `a scenario of ${scenario.type} ${value}, as of ${scenario.asof}: not a fact, no receipt`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, ...exposed(env, 'scenario') };
 }
 
 /**
@@ -471,11 +734,22 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   if (outcome === 'bad_request' && env.error === 'E_JOB_UNKNOWN' && request?.job === undefined) {
     return failed('E_ENVELOPE', 'E_JOB_UNKNOWN answers a job URL only, and this request was not one', '$.error');
   }
+  // Since spec-0.6.0 (5.5, 5.9): at a whatif request (one with overrides) ok, stale and pending are not
+  // answers; a scenario is an answer only to one; the whatif bad_request codes and E_WHATIF_NO_SOLUTION
+  // are only at one (E_WHATIF_NO_SOLUTION only with solve).
+  const whatif = request?.overrides !== undefined;
+  if (whatif && (outcome === 'ok' || outcome === 'stale' || outcome === 'pending')) return failed('E_ENVELOPE', `${outcome} is not an answer to a whatif request`, '$.outcome');
+  if (outcome === 'scenario' && !whatif) return failed('E_ENVELOPE', 'a scenario answers a whatif request (with overrides), and this request had none', '$.outcome');
+  // Coordinator decision (round 2): E_WHATIF_UNSUPPORTED only with solve; E_SLICE_MEMBER only with overrides.
+  if (outcome === 'bad_request' && env.error === 'E_WHATIF_UNSUPPORTED' && request?.solve === undefined) return failed('E_ENVELOPE', 'E_WHATIF_UNSUPPORTED is the code of a whatif request with solve only', '$.error');
+  if (outcome === 'bad_request' && env.error === 'E_SLICE_MEMBER' && !whatif) return failed('E_ENVELOPE', 'E_SLICE_MEMBER is a code of a whatif request (with overrides) only', '$.error');
+  if (env.fault === 'E_WHATIF_NO_SOLUTION' && request?.solve === undefined) return failed('E_ENVELOPE', 'E_WHATIF_NO_SOLUTION is the fault of a whatif request with solve', '$.fault');
   const pin = request?.fn_hash;
   if (pin !== undefined && outcome !== 'pending') {
     if (echo === null && outcome !== 'rate_limited' && outcome !== 'bad_request') return failed('E_ENVELOPE', 'an envelope answering a pinned request echoes its fn_hash', '$.fn_hash');
     if (echo !== null && echo !== pin) return failed('E_ENVELOPE', 'fn_hash echoes another function than the one pinned', '$.fn_hash');
   }
+  if (outcome === 'scenario') return scenarioResult(env, request as Req, echo);
   if (!has(env, 'receipt')) {
     let pending: Pending | null = null;
     if (outcome === 'pending') {
@@ -499,7 +773,7 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
     const fault = has(env, 'fault') ? (env.fault as Fault) : null;
     const detail = fault ? `outcome ${outcome}, fault ${fault}` : pending ? `outcome pending, job ${pending.job}, estimate ${pending.estimateSeconds} s` : has(env, 'error') ? `outcome ${outcome}, ${String(env.error)}` : `outcome ${outcome}`;
     const foreignDetail = has(env, 'detail') ? (env.detail as ForeignDetail) : null;
-    return { ok: true, code: 'OK', outcome, trust: null, receiptHash: null, detail: foreignDetail ? `${detail} (${foreignDetail})` : detail, path: null, fault, pending, fnHash: echo, foreignDetail, ...exposed(env, outcome) };
+    return { ok: true, kind: null, code: 'OK', outcome, trust: null, receiptHash: null, scenario: null, detail: foreignDetail ? `${detail} (${foreignDetail})` : detail, path: null, fault, pending, fnHash: echo, foreignDetail, ...exposed(env, outcome) };
   }
   // Step 4.
   let r: { receipt: JsonObject; hash: string };
@@ -527,7 +801,7 @@ function checkParsed(status: number, o: JsonValue, numbers: Map<string, string>,
   if (problem !== null) return failed('E_ENVELOPE', problem, '$.trust', r.hash);
   if (echo !== null && echo !== cell.fn_hash) return failed('E_ENVELOPE', "fn_hash echoes another function than the receipt's", '$.fn_hash', r.hash);
   if (env.superseded_by === r.hash) return failed('E_ENVELOPE', 'superseded_by is the receipt itself', '$.superseded_by', r.hash);
-  return { ok: true, code: 'OK', outcome, trust, receiptHash: r.hash, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, ...exposed(env, outcome) };
+  return { ok: true, kind: 'receipt', code: 'OK', outcome: outcome as 'ok' | 'stale', trust, receiptHash: r.hash, scenario: null, detail: `outcome ${outcome}, trust ${trust}, receipt signed by ${r.receipt.computed_by as string}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, ...exposed(env, outcome) };
 }
 
 function checkStatus(status: unknown): asserts status is number {
@@ -553,7 +827,7 @@ function checkStatus(status: unknown): asserts status is number {
  */
 export function checkEnvelope(status: number, body: unknown, keys: unknown, request: EnvelopeRequest): EnvelopeResult {
   checkStatus(status);
-  checkRequest(request);
+  const req = checkRequest(request);
   const sources = collectSources(keys);
   const numbers = new Map<string, string>();
   let o: JsonValue;
@@ -563,7 +837,7 @@ export function checkEnvelope(status: number, body: unknown, keys: unknown, requ
     if (e instanceof DatumeshError) return failed(e.code, e.detail, e.path);
     throw e;
   }
-  return checkParsed(status, o, numbers, sources, request as Req);
+  return checkParsed(status, o, numbers, sources, req);
 }
 
 // ---------------------------------------------------------------- slice pages (5.6)
@@ -601,9 +875,9 @@ export interface SlicePage {
 }
 
 /** An answer of the slice endpoint: an envelope result, with `page` when it is an `ok` page. */
-export interface SlicePageResult extends EnvelopeResult {
+export type SlicePageResult = EnvelopeResult & {
   page: SlicePage | null;
-}
+};
 
 const asPage = (r: EnvelopeResult, page: SlicePage | null = null): SlicePageResult => ({ ...r, page });
 
@@ -724,7 +998,7 @@ function checkPage(status: number, o: JsonObject, numbers: Map<string, string>, 
     out.push({ outcome: m.outcome as 'ok' | 'stale', trust: m.trust as Trust, receiptHash: r.hash, fnHash: mecho, cell });
   }
   const page: SlicePage = { slice, members: out, next: has(o, 'next') ? (o.next as string) : null };
-  return { ok: true, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, resolved: null, shadows: null, error: null, page };
+  return { ok: true, kind: null, code: 'OK', outcome: 'ok', trust: null, receiptHash: null, scenario: null, cycle: null, detail: `a page of ${out.length} members${page.next ? ', and a next page' : ''}`, path: null, fault: null, pending: null, fnHash: echo, foreignDetail: null, resolved: null, shadows: null, error: null, page };
 }
 
 function slicePage(status: number, o: JsonValue, numbers: Map<string, string>, sources: Sources, request: SliceRequest): SlicePageResult {
@@ -792,10 +1066,7 @@ const REFUSALS: readonly string[] = ['unlicensed', 'payment_required', 'rate_lim
 export function checkBatch(status: number, body: unknown, keys: unknown, requests: readonly (EnvelopeRequest | SliceRequest)[]): BatchResult {
   checkStatus(status);
   if (!Array.isArray(requests)) throw new TypeError('requests must be an array of request descriptions, one per request of the batch');
-  for (const r of requests) {
-    if (isObject(r) && has(r, 'slice_id')) checkSliceRequest(r);
-    else checkRequest(r);
-  }
+  const checked = requests.map((r) => (isObject(r) && has(r, 'slice_id') ? (checkSliceRequest(r), r) : checkRequest(r)));
   const sources = collectSources(keys);
   const whole = (code: ErrorCode, detail: string, path: string | null): BatchResult => ({ ok: false, code, outcome: null, detail, path, items: null, refusal: null });
   const numbers = new Map<string, string>();
@@ -823,7 +1094,7 @@ export function checkBatch(status: number, body: unknown, keys: unknown, request
   }
   const items = (o as JsonObject[]).map((it, i) => {
     const at = `$[${i}].envelope`;
-    const req = requests[i] as unknown as JsonObject;
+    const req = checked[i] as unknown as JsonObject;
     const sub = subNumbers(numbers, at);
     const r = has(req, 'slice_id') ? slicePage(it.status as number, it.envelope, sub, sources, req as unknown as SliceRequest) : checkParsed(it.status as number, it.envelope, sub, sources, req as Req);
     return r.ok ? r : { ...r, path: atPath(at, r.path) };

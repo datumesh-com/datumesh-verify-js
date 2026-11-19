@@ -3,6 +3,24 @@
 Releases of `@datumesh/verify`. Earlier releases are described in the commit log and, for the
 specification side, in SPEC.md section 14.
 
+## 0.6.0 — spec-0.6.0
+
+Conforms to the Datumesh specification revision `spec-0.6.0` (spec commit `05172a4`). The vector
+set is 1564 vectors: the 897 this library runs pass (818 of spec-0.5.0 and the 79 new ones: 16
+receipt, 36 envelope, 22 describe, 5 mesh), and the 667 formula-dialect vectors, the 11 new `call`
+vectors included, are skipped as before.
+
+**Compatibility.** A mesh that serves receipts with `source` is unverifiable by clients on core < 0.3.9 or datumesh < 0.6.0 (@datumesh/verify < 0.6.0); such receipts are new, and every receipt signed before them verifies unchanged.
+
+- **Receipts with `source`** (SPEC 8.1, 10.1). `verify` returns the receipt's `source` (`SourceInfo`, a copy, or `null`). `source` is part of the signed payload; its shape and rules are checked in steps 2-4, and `retrieved` is at or before `issued` (`E_TIME_ORDER`). Verification does not fetch `url`.
+- **Trust `relayed`** (SPEC 5.5). A receipt signed by the host of `cell.ns`, with no inputs and a `source`, is `relayed`; `primary` now needs that there is no `source`. Neither depends on the mesh asked.
+- **Scenarios** (SPEC 5.9). `checkEnvelope` takes `overrides` and `solve` in the request. A `scenario` answer is its own result kind (`kind: 'scenario'`, the `Scenario` type): it has no receipt, no receipt hash and no trust, and is refused unless the request carried overrides. Its binding (cell, asof, overrides, solved) is checked as step 5 requires.
+- **Cycles** (SPEC 5.5, 15.12). An `error` envelope with `E_EVAL_UNAVAILABLE` may carry `cycle` (`{path, fixes}`), exposed as `EnvelopeResult.cycle`.
+- **Codes** (SPEC 10.2). `E_WHATIF_UNSUPPORTED` (a `bad_request` at a whatif request) and `E_WHATIF_NO_SOLUTION` (the fault of a `not_covered` answer to a whatif request with `solve`, in `FAULTS`). Neither is a verification result.
+- **Describe** (SPEC 16.8). A method or function may carry `tests` and `source`, checked as `E_DESCRIBE`. A function answer (`kind: 'function'`) is checked against its held descriptor, and `checkDescribe` returns `{kind: 'function', fn, fnHash, tests, source}`.
+- **Mesh document** (SPEC 9.6). The optional `whatif` endpoint, with no placeholders, is in `MESH_ENDPOINTS` and in `resolveMesh`'s endpoints.
+- **Public API.** `EnvelopeResult` is a discriminated union on `kind`: `ReceiptEnvelope`, `ScenarioEnvelope` and `OtherEnvelope`. `Trust` gains `relayed`. The types `Scenario`, `ScenarioOverride`, `Cycle`, `CycleFix`, `SourceInfo` and `DescribeSource`/`DescribeTests` are exported.
+
 ## 0.5.1 — spec-0.5.0
 
 The first published release for `spec-0.5.0`; the library is 0.5.0's. The tag `v0.5.0` was

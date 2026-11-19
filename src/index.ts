@@ -1,5 +1,5 @@
 /**
- * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.5.0).
+ * @datumesh/verify: verify Datumesh receipts (SPEC.md, revision spec-0.6.0).
  *
  * Everything here is synchronous and offline except fetchKeys, the only function that uses the
  * network.
@@ -12,18 +12,18 @@ import { isHex } from './lexical.js';
 import { KINDS, cellUnit, inferKind, validate, validateMembers, type Kind } from './validate.js';
 
 export { DatumeshError, ERROR_CODES, SPEC_VERSION, type ErrorCode } from './errors.js';
-export { verify, type VerifyResult, type Recompute } from './verify.js';
-export { checkEnvelope, checkSlicePage, checkBatch, FAULTS, type EnvelopeResult, type Resolved, type Resolution, type Shadows, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult, type ForeignDetail, FOREIGN_DETAILS } from './envelope.js';
+export { verify, type VerifyResult, type Recompute, type SourceInfo } from './verify.js';
+export { checkEnvelope, checkSlicePage, checkBatch, FAULTS, type EnvelopeResult, type ReceiptEnvelope, type ScenarioEnvelope, type OtherEnvelope, type Scenario, type ScenarioOverride, type ScenarioValueOverride, type ScenarioSliceOverride, type ScenarioCell, type TypedValue, type Cycle, type CycleFix, type Resolved, type Resolution, type Shadows, type EnvelopeRequest, type Outcome, type Trust, type Fault, type Pending, type SliceRequest, type SliceMember, type SlicePage, type SlicePageResult, type BatchResult, type ForeignDetail, FOREIGN_DETAILS } from './envelope.js';
 export { resolveMesh, MESH_ENDPOINTS, type MeshResult, type DocumentResponse } from './mesh.js';
 export { parseUri, formatUri, httpsUrl, type CellRef, type TypedScalar, type Signature, type Unit, type UnitRef } from './uri.js';
 export { keysFromResponse, keysFromDocument, fetchKeys, FETCH_TIMEOUT_MS, FETCH_MAX_BYTES, type KeysResult, type KeyEntry, type KeyMap, type KeySource, type Declarations, type DeclarationEntry } from './keys.js';
 export { inheritLicence, checkEntitlement, inputLicences, isUnrooted, licenceTier, LICENCE_TIERS, type LicenceResult, type LicenceReason, type EntitlementResult, type EntitlementReason } from './licence.js';
-export { defineClass, classHash, checkKeyNormalisation, parseObjectKey, formatObjectKey, objectJson, objectId, shortId, checkDescribe, checkDefine, KEY_NORMALISATIONS, type KeyNormalisation, type ClassEnv, type ClassDefinition, type DecodedObject, type DescribeResult } from './classes.js';
+export { defineClass, classHash, checkKeyNormalisation, parseObjectKey, formatObjectKey, objectJson, objectId, shortId, checkDescribe, checkDefine, KEY_NORMALISATIONS, type KeyNormalisation, type ClassEnv, type ClassDefinition, type DecodedObject, type DescribeResult, type DescribeTests, type DescribeSource } from './classes.js';
 export type { Kind } from './validate.js';
 export type { JsonValue } from './json.js';
 
 /** Library version. */
-export const VERSION = '0.5.1';
+export const VERSION = '0.6.0';
 
 function parseAndValidate(input: unknown, kind: Kind | undefined | null): { value: JsonValue; kind: Kind } {
   if (kind !== undefined && kind !== null && !KINDS.includes(kind)) throw new TypeError(`unknown kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(', ')}`);

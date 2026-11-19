@@ -198,10 +198,10 @@ test('item 1: probes agree with the reference tool (mesh documents, poll, next)'
 // ------------------------------------------------------------------------------------------
 
 test('item 2: ERROR_CODES gains fourteen codes after E_FOREIGN_UNAVAILABLE, in the order of 10.2', () => {
-  assert.equal(ERROR_CODES.length, 63);
+  assert.equal(ERROR_CODES.length, 65); // 63 at spec-0.5.0; spec-0.6.0 appends E_WHATIF_UNSUPPORTED and E_WHATIF_NO_SOLUTION (last, after E_DESCRIBE)
   const i = ERROR_CODES.indexOf('E_FOREIGN_UNAVAILABLE');
   assert.equal(i, 48);
-  assert.deepEqual(ERROR_CODES.slice(i + 1), ['E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE']);
+  assert.deepEqual(ERROR_CODES.slice(i + 1), ['E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE', 'E_WHATIF_UNSUPPORTED', 'E_WHATIF_NO_SOLUTION']);
   assert.equal(new Set(ERROR_CODES).size, ERROR_CODES.length);
   // The formula codes of 15.11 are not in 10.2: E_FORMULA_KEY and E_FORMULA_DISPATCH_KEY are faults, not codes.
   assert.equal(ERROR_CODES.some((c) => c.startsWith('E_FORMULA')), false);
@@ -226,7 +226,7 @@ test('item 2: none of the new codes is a verification result (10.2)', async () =
 });
 
 test('item 2: the faults E_FORMULA_KEY and E_FORMULA_DISPATCH_KEY are exported with the other faults (5.5, 15.11)', () => {
-  assert.deepEqual([...lib.FAULTS].sort(), ['E_FORMULA_ABSENT', 'E_FORMULA_DISPATCH_KEY', 'E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_EMPTY', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_RANGE']);
+  assert.deepEqual([...lib.FAULTS].sort(), ['E_FORMULA_ABSENT', 'E_FORMULA_DISPATCH_KEY', 'E_FORMULA_DIV_ZERO', 'E_FORMULA_DOMAIN', 'E_FORMULA_EMPTY', 'E_FORMULA_FUTURE', 'E_FORMULA_KEY', 'E_FORMULA_RANGE', 'E_WHATIF_NO_SOLUTION']); // + E_WHATIF_NO_SOLUTION since spec-0.6.0 (a request fault, not a formula fault)
 });
 
 // ------------------------------------------------------------------------------------------
@@ -374,7 +374,9 @@ test('item 3: the faults E_FORMULA_KEY and E_FORMULA_DISPATCH_KEY on not_covered
   }
   const v = byId['envelope/not-covered-fault-key'];
   for (const fault of ['E_FORMULA_DISPATCH', 'E_FORMULA_TYPE', 'E_FORMULA_METHOD', 'e_formula_key', 'E_KEY_NORMALISATION']) assert.equal(check(v, { outcome: 'not_covered', fault }).code, 'E_ENVELOPE', fault); // not faults
-  for (const fault of lib.FAULTS) assert.equal(check(v, { outcome: 'not_covered', fault }).code, 'OK', fault);
+  for (const fault of lib.FAULTS.filter((f) => f !== 'E_WHATIF_NO_SOLUTION')) assert.equal(check(v, { outcome: 'not_covered', fault }).code, 'OK', fault);
+  // spec-0.6.0 (5.9): E_WHATIF_NO_SOLUTION is the fault of a whatif request with solve only; this request has none.
+  assert.equal(check(v, { outcome: 'not_covered', fault: 'E_WHATIF_NO_SOLUTION' }).code, 'E_ENVELOPE');
   assert.equal(check(v, { outcome: 'ok', fault: 'E_FORMULA_KEY' }, 200).code, 'E_ENVELOPE'); // only on not_covered
 });
 
@@ -391,7 +393,7 @@ test('item 3: E_SHORT_ID_AMBIGUOUS in bad_request only (16.8)', () => {
 
 test('item 3: the define and write codes appear in no read envelope; an error envelope carries no define, class or describe code', () => {
   const v = byId['envelope/error-500'];
-  const NOT = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE'];
+  const NOT = ['E_ENVELOPE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_FOREIGN_UNAVAILABLE', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED', 'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_SHORT_ID_AMBIGUOUS', 'E_DESCRIBE', 'E_WHATIF_UNSUPPORTED', 'E_WHATIF_NO_SOLUTION'];
   for (const c of ERROR_CODES) assert.equal(check(v, { outcome: 'error', error: c }, 503).code, NOT.includes(c) ? 'E_ENVELOPE' : 'OK', c);
   for (const outcome of ['error', 'bad_request', 'unlicensed', 'payment_required']) for (const c of ['E_UNROOTED_INPUT']) assert.notEqual(check(v, { outcome, error: c }, { error: 500, bad_request: 400, unlicensed: 403, payment_required: 402 }[outcome]).code, 'OK', `${outcome} ${c}`);
   // bad_request carries the parse codes, E_CANON_HEX, E_SLICE_AT_CELL and (since spec-0.5.0) the key codes and E_SHORT_ID_AMBIGUOUS (c8896ad: RS-b, PY-1).
@@ -1103,11 +1105,11 @@ test('re-pin 1: bad_request carries exactly the parse codes, E_CANON_HEX, E_SLIC
 // Re-pin 2: the exact list of codes an error envelope may not carry (5.5, 10.2)
 // ------------------------------------------------------------------------------------------
 
-test('re-pin 2: an error envelope carries every code of 10.2 except exactly the 18 listed', () => {
+test('re-pin 2: an error envelope carries every code of 10.2 except exactly the 20 listed (18 at spec-0.5.0, + the two whatif codes, spec-0.6.0)', () => {
   const v = byId['envelope/error-500'];
   const NOT_IN_ERROR = ['E_ENVELOPE', 'E_DESCRIBE', 'E_JOB_UNKNOWN', 'E_SLICE_AT_CELL', 'E_NAME_UNBOUND', 'E_SHORT_ID_AMBIGUOUS', 'E_KEY_NORMALISATION', 'E_KEY_ENCODING', 'E_UNROOTED_INPUT', 'E_NAMESPACE_SUSPENDED',
-    'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER'];
-  assert.equal(NOT_IN_ERROR.length, 18); // the client's 2, the request codes 6 (E_JOB_UNKNOWN, E_SLICE_AT_CELL, E_NAME_UNBOUND, E_SHORT_ID_AMBIGUOUS and the two key codes), the define and write codes 10
+    'E_CLASS_MEMBER', 'E_CLASS_PARENT', 'E_CLASS_INHERIT', 'E_CLASS_OVERRIDE', 'E_CLASS_FINAL', 'E_CLASS_METHOD', 'E_CLASS_INTERFACE', 'E_CLASS_OWNER', 'E_WHATIF_UNSUPPORTED', 'E_WHATIF_NO_SOLUTION'];
+  assert.equal(NOT_IN_ERROR.length, 20); // the client's 2, the request codes 6 (E_JOB_UNKNOWN, E_SLICE_AT_CELL, E_NAME_UNBOUND, E_SHORT_ID_AMBIGUOUS and the two key codes), the define and write codes 10
   for (const c of NOT_IN_ERROR) assert.ok(ERROR_CODES.includes(c), c);
   for (const c of ERROR_CODES) {
     // E_FOREIGN_UNAVAILABLE is allowed in `error`, with status 502 and a `detail` (5.5)

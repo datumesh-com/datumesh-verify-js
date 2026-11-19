@@ -1,5 +1,5 @@
 /** The spec revision this library conforms to. */
-export const SPEC_VERSION = 'spec-0.5.0';
+export const SPEC_VERSION = 'spec-0.6.0';
 
 /**
  * Every error code defined by SPEC.md 10.2, in the order of that table. `E_EVAL_UNAVAILABLE` and
@@ -75,6 +75,8 @@ export const ERROR_CODES = [
   'E_KEY_ENCODING',
   'E_SHORT_ID_AMBIGUOUS',
   'E_DESCRIBE',
+  'E_WHATIF_UNSUPPORTED',
+  'E_WHATIF_NO_SOLUTION',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

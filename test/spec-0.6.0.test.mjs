@@ -84,7 +84,7 @@ test('the spec submodule is at 640898c: 1564 vectors, 90 of them new (11 call, s
 test('the CHANGELOG has the 0.6.0 entry with the spec-0.6.0 compatibility line (C2, verbatim)', () => {
   const log = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   assert.match(log, /0\.6\.0/);
-  const line = 'A mesh that serves receipts with `source` is unverifiable by clients on core < 0.4.0 or datumesh < 0.6.0 (@datumesh/verify < 0.6.0); such receipts are new, and every receipt signed before them verifies unchanged.';
+  const line = 'A mesh that serves receipts with `source` is unverifiable by clients on core < 0.3.9 or datumesh < 0.6.0 (@datumesh/verify < 0.6.0); such receipts are new, and every receipt signed before them verifies unchanged.';
   assert.ok(log.replace(/\s+/g, ' ').includes(line));
 });
 

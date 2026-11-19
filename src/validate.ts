@@ -19,7 +19,9 @@ import {
   checkNamespace,
   checkString,
   checkTypedValue,
+  checkDnsName,
   isTypeName,
+  URL_RE,
 } from './lexical.js';
 import { canonUnit, resolveUnit, structUnit } from './units.js';
 import { isKeyRule } from './normalisation.js';
@@ -173,9 +175,40 @@ const RECEIPT_MEMBERS = [
   'value',
 ] as const;
 
+/**
+ * SPEC 8.1 `source` (since spec-0.6.0): exactly name, retrieved and url, with sha256 and takeover
+ * optional, each of its JSON type; only when `inputs` is empty; and `name` is not the host of
+ * `cell.ns` (a publisher does not relay itself). Step 2; its rules are checked in step 3.
+ */
+function structSource(o: JsonObject, path: string): void {
+  const s = o.source;
+  const sp = memberPath(path, 'source');
+  if (!isObject(s)) fail('E_SCHEMA', 'source is an object', sp);
+  members(s, ['name', 'retrieved', 'url'], ['sha256', 'takeover'], sp);
+  for (const k of sortedKeys(s)) if (typeof s[k] !== 'string') fail('E_SCHEMA', `source.${k} must be a string`, memberPath(sp, k));
+  if (Array.isArray(o.inputs) && o.inputs.length > 0) fail('E_SCHEMA', 'source is only present when inputs is empty', sp);
+  const ns = (o.cell as JsonObject).ns as string;
+  if (s.name === ns.split('/')[0]) fail('E_SCHEMA', 'source.name is the host of cell.ns: a publisher does not relay itself', memberPath(sp, 'name'));
+}
+
+/** SPEC 8.1 `source` canonical rules (step 3), in member order: name, retrieved, sha256, takeover, url. */
+function canonSource(s: JsonObject, path: string): void {
+  checkDnsName(s.name as string, memberPath(path, 'name'));
+  checkInstant(s.retrieved as string, memberPath(path, 'retrieved'));
+  if (has(s, 'sha256')) checkHex(s.sha256 as string, 64, memberPath(path, 'sha256'));
+  if (has(s, 'takeover')) checkHttpsUrl(s.takeover as string, memberPath(path, 'takeover'));
+  checkHttpsUrl(s.url as string, memberPath(path, 'url'));
+}
+
+/** The https URL rule of 8.1 (`source.url`, `source.takeover`): E_CANON_LICENCE for the grammar, then E_CANON_LIMIT. */
+function checkHttpsUrl(u: string, path: string): void {
+  if (!URL_RE.test(u)) fail('E_CANON_LICENCE', 'an https:// URL of printable ASCII', path);
+  if (u.length > LIMITS.licence_url) fail('E_CANON_LIMIT', 'the URL is longer than 512 characters', path);
+}
+
 function structReceipt(v: JsonValue, path: string): void {
   const o = expectObject(v, path);
-  members(o, RECEIPT_MEMBERS, [], path);
+  members(o, RECEIPT_MEMBERS, ['source'], path);
   for (const k of sortedKeys(o)) {
     const p = memberPath(path, k);
     switch (k) {
@@ -189,6 +222,9 @@ function structReceipt(v: JsonValue, path: string): void {
       }
       case 'valid':
         structArgs(o.valid, p);
+        break;
+      case 'source':
+        structSource(o, path);
         break;
       case 'value':
         if (typeof o.value !== 'string' && typeof o.value !== 'boolean') fail('E_SCHEMA', 'value must be a string or a boolean', p);
@@ -380,6 +416,9 @@ function canonReceipt(o: JsonObject, path: string): void {
       case 'sig':
         checkHex(v as string, 128, p);
         break;
+      case 'source':
+        canonSource(v as JsonObject, p);
+        break;
       case 'summary':
         if (v === '') fail('E_CANON_STRING', 'summary must not be empty', p);
         checkString(v as string, p, { limit: LIMITS.summary });
@@ -427,6 +466,8 @@ function consistency(o: JsonObject, path: string): void {
   const issued = o.issued as string;
   // Instants are fixed width, so string order is time order (SPEC 3.3).
   if (!(tx <= asof && asof <= issued)) fail('E_TIME_ORDER', 'requires tx <= asof <= issued', path);
+  // Since spec-0.6.0 (8.2): with a source, retrieved is at or before issued.
+  if (has(o, 'source') && ((o.source as JsonObject).retrieved as string) > issued) fail('E_TIME_ORDER', 'source.retrieved is after issued', memberPath(path, 'source'));
 }
 
 // ---------------------------------------------------------------- slices and manifests

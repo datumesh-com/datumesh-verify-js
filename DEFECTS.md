@@ -1197,3 +1197,26 @@ changed, with tests for both sides of the boundary.
   This library ships Unicode 15.1 tables generated from the UCD.
 - **Proposed wording (3.5, rationale).** "Implementations must use Unicode 15.1 (or later)
   normalisation data, not whatever their platform provides."
+
+## 19. Gap: which whatif request a `E_WHATIF_UNSUPPORTED` or `E_WHATIF_NO_SOLUTION` answer belongs to (5.5, 5.9, 10.2) [spec-0.6.0, open]
+
+- **Problem.** 10.2 and 5.5 describe `E_WHATIF_UNSUPPORTED` as "a whatif request whose `solve` the
+  mesh does not offer" and `E_WHATIF_NO_SOLUTION` as the fault "to a whatif request with `solve`".
+  The envelope check cannot know whether a mesh offers `solve`, and 5.5 does not say which request
+  shape a client requires for each code.
+- **Resolution (this library, 0.6.0; coordinator decision for round 2).** `E_WHATIF_UNSUPPORTED` is
+  a bad_request code only for a request with `solve`; `E_SLICE_MEMBER` only for a request with
+  `overrides`; `E_WHATIF_NO_SOLUTION` only as the fault of a `not_covered` answer to a request with
+  `solve`. Neither whatif code is carried by an `error` envelope. Order in 10.2: both after
+  `E_DESCRIBE`, last.
+- **Proposed wording (5.9).** State these three rules in 5.9 with their outcomes, and add vectors for
+  each refusal.
+
+## 20. Underspecified: the order and uniqueness of a request's overrides (5.9) [spec-0.6.0, open]
+
+- **Problem.** 5.9 says the scenario's overrides are "sorted by their cell or slice id", but says
+  nothing about the caller's request, whose malformation is the caller's error (5.5).
+- **Resolution (this library, 0.6.0; coordinator decision).** A request whose overrides are not
+  sorted strictly by cell or slice id (so repeated ones are refused too), or that is empty without
+  `solve`, or has `solve` without `overrides`, is malformed (a TypeError, not an E_* code).
+- **Proposed wording (5.9).** Say so in 5.9, next to the rule about the scenario's echo.

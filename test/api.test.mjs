@@ -14,8 +14,8 @@ const keys = Object.entries(stored.keys).map(([h, e]) => keysFromResponse(h, e.h
 
 test('SPEC_VERSION and package metadata', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.equal(SPEC_VERSION, 'spec-0.5.0');
-  assert.equal(esm.VERSION, '0.5.1');
+  assert.equal(SPEC_VERSION, 'spec-0.6.0'); // build2-part1: 0.6.0 (was spec-0.5.0 and 0.5.1)
+  assert.equal(esm.VERSION, '0.6.0');
   assert.equal(pkg.datumesh.spec, SPEC_VERSION);
   assert.equal(pkg.version, esm.VERSION);
   assert.equal(pkg.name, '@datumesh/verify');
@@ -70,7 +70,7 @@ test('DatumeshError carries code, path and detail', () => {
 
 test('VerifyResult shape', () => {
   const ok = verify(stored.input, keys);
-  assert.deepEqual(Object.keys(ok).sort(), ['blobChecked', 'code', 'detail', 'hash', 'key', 'level', 'ok', 'path']);
+  assert.deepEqual(Object.keys(ok).sort(), ['blobChecked', 'code', 'detail', 'hash', 'key', 'level', 'ok', 'path', 'source']); // source since spec-0.6.0 (null without one)
   assert.deepEqual({ ok: ok.ok, code: ok.code, level: ok.level, hash: ok.hash, key: ok.key, path: ok.path, blobChecked: ok.blobChecked }, { ok: true, code: 'OK', level: 'signed', hash: stored.sha256, key: 'rates.example.org#d712b32a2cc5cb7c', path: null, blobChecked: false });
   const full = verify(stored.input, keys, stored.recompute);
   assert.equal(full.level, 'recomputed');
